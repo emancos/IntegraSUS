@@ -10,6 +10,8 @@ import { ParserModule } from './parser/parser.module.js';
 import { ImporterModule } from './importer/importer.module.js';
 import { ProcedimentosModule } from './procedimentos/procedimentos.module.js';
 import { AuthModule } from './auth/auth.module.js';
+import { CnesModule } from './cnes/cnes.module.js';
+import { SiaModule } from './sia/sia.module.js';
 
 @Module({
   imports: [
@@ -27,6 +29,8 @@ import { AuthModule } from './auth/auth.module.js';
     ImporterModule,
     ProcedimentosModule,
     AuthModule,
+    CnesModule,
+    SiaModule,
   ],
   controllers: [AppController],
   providers: [AppService],
