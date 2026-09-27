@@ -98,10 +98,34 @@ export class SyncService {
 
   private async syncCnes() {
     this.logger.log('Starting CNES Sync...');
-    // We can assume the file is already in projeto_base_cnes for testing purposes or we can download it.
-    // For now we will use the local ZIP we already have to save time, and extract it.
-    const cnesZipPath = path.join(process.cwd(), 'projeto_base_cnes', 'BASE_DE_DADOS_CNES_202608.ZIP');
+    const cnesZipPath = path.join(process.cwd(), 'BASE_DE_DADOS_CNES_202608.ZIP');
     const cnesExtractedPath = path.join(process.cwd(), 'temp_cnes');
+
+    if (!fs.existsSync(cnesZipPath)) {
+      this.logger.log('Downloading CNES ZIP...');
+      try {
+        const url = 'https://cnes.datasus.gov.br/EstatisticasServlet?path=BASE_DE_DADOS_CNES_202608.ZIP';
+        const response = await axios({
+          url,
+          method: 'GET',
+          responseType: 'stream',
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
+            'Accept': '*/*'
+          }
+        });
+        const writer = fs.createWriteStream(cnesZipPath);
+        response.data.pipe(writer);
+        await new Promise<void>((resolve, reject) => {
+          writer.on('finish', () => resolve());
+          writer.on('error', reject);
+        });
+        this.logger.log('Download CNES ZIP finished.');
+      } catch (e) {
+        this.logger.error('Failed to download CNES ZIP: ' + (e as Error).message);
+        return;
+      }
+    }
 
     if (fs.existsSync(cnesZipPath)) {
       this.logger.log('Extracting CNES ZIP...');
@@ -120,6 +144,7 @@ export class SyncService {
 
       this.logger.log('Limpando diretório temporário CNES...');
       fs.rmSync(cnesExtractedPath, { recursive: true, force: true });
+      fs.unlinkSync(cnesZipPath);
       
       this.logger.log('CNES Sync completed successfully.');
     } else {
@@ -129,9 +154,26 @@ export class SyncService {
 
   private async syncSia() {
     this.logger.log('Starting SIA Sync...');
-    // Mock the download of the file (usually a URL to BDSIAxxxx.exe)
-    const siaZipPath = path.join(process.cwd(), 'projeto_base_sia', 'BDSIA202609a.exe');
+    const siaZipPath = path.join(process.cwd(), 'BDSIA202609a.exe');
     const siaExtractedPath = path.join(process.cwd(), 'temp_sia');
+
+    if (!fs.existsSync(siaZipPath)) {
+      this.logger.log('Downloading SIA EXE...');
+      try {
+        const url = 'https://github.com/RenatoKR/SIASUS/raw/main/bdsia/BDSIA202609a.exe';
+        const response = await axios({ url, method: 'GET', responseType: 'stream' });
+        const writer = fs.createWriteStream(siaZipPath);
+        response.data.pipe(writer);
+        await new Promise<void>((resolve, reject) => {
+          writer.on('finish', () => resolve());
+          writer.on('error', reject);
+        });
+        this.logger.log('Download SIA EXE finished.');
+      } catch (e) {
+        this.logger.error('Failed to download SIA EXE: ' + (e as Error).message);
+        return;
+      }
+    }
 
     if (fs.existsSync(siaZipPath)) {
       this.logger.log('Extracting SIA EXE via 7zip-bin...');
@@ -144,24 +186,24 @@ export class SyncService {
         
         await this.siaImporter.createTables();
 
-        const cidPath = path.join(siaExtractedPath, 'CADMUN.DBF'); // Just using CADMUN temporarily, but in production we expect CID.DBF
-        // The test repo only has CADMUN.DBF for DBF example, but let's assume it would be CID.DBF
+        const cidPath = path.join(siaExtractedPath, 'CADMUN.DBF'); 
         const realCidPath = path.join(siaExtractedPath, 'CID.DBF');
         if (fs.existsSync(realCidPath)) {
           await this.siaImporter.importCids(realCidPath);
         } else if (fs.existsSync(cidPath)) {
-          // Fallback to try reading if it has CID format, but in this case CADMUN is diff.
-          this.logger.warn('CID.DBF not found in extracted SIA files.');
+          this.logger.warn('CID.DBF not found in extracted SIA files. (Only test CADMUN found)');
         }
 
         this.logger.log('Limpando diretório temporário SIA...');
         fs.rmSync(siaExtractedPath, { recursive: true, force: true });
+        // Optional: delete the EXE after successful extraction
+        fs.unlinkSync(siaZipPath);
         this.logger.log('SIA Sync completed successfully.');
       } catch (err) {
         this.logger.error('Failed to extract/import SIA: ' + (err as Error).message);
       }
     } else {
-      this.logger.warn('SIA EXE not found.');
+      this.logger.warn('SIA EXE not found even after download.');
     }
   }
 }
