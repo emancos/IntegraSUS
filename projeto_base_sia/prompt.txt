@@ -1,4 +1,0 @@
-Agora, faça um teste utilizado o readme presente na pasta projeto_base_sia, fazer o download do arquivo bdsia mais recente, que apesar de estar em .exe se renomeado para 7z pode ser descompactados.
-Após decompactados teremos os arquivos .DBF, esses são os dados.
-Utilizando a biblioteca node-dbf podemos ter acesso aos dados
-Analise os dados e gere um relatório verificando os dados que podemos processar e fornecer via API.
