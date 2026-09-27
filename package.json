@@ -1,7 +1,7 @@
 {
-  "name": "temp-app",
-  "version": "0.0.1",
-  "description": "",
+  "name": "integra-sus-api",
+  "version": "2.0.0",
+  "description": "API Unificada do SUS (SIGTAP, CNES e SIA)",
   "author": "",
   "private": true,
   "license": "UNLICENSED",
@@ -38,6 +38,7 @@
     "axios": "^1.20.0",
     "basic-ftp": "^6.2.1",
     "bcrypt": "^6.0.0",
+    "csv-parser": "^3.2.1",
     "node-7z": "^3.0.0",
     "node-dbf": "^0.4.0",
     "passport": "^0.7.0",

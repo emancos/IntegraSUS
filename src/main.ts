@@ -6,9 +6,9 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
   const config = new DocumentBuilder()
-    .setTitle('SIGTAP API')
-    .setDescription('API de integração com a Tabela SIGTAP (SUS)')
-    .setVersion('1.0')
+    .setTitle('IntegraSUS API')
+    .setDescription('API Unificada do SUS (Integração SIGTAP, CNES e SIA)')
+    .setVersion('2.0')
     .addBearerAuth()
     .build();
     
