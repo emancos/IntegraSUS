@@ -62,6 +62,28 @@ Se preferir rodar no ambiente nativo (desenvolvimento):
 
 ---
 
+## 🔑 Criando Credenciais de Acesso (Client API)
+
+A API possui um sistema de autenticação via JWT protegido por `client_id` e `client_secret`. Para interagir com endpoints seguros, você precisa cadastrar um cliente no banco de dados.
+
+Foi disponibilizado um script utilitário interno para gerar e encriptar essas credenciais:
+
+### Ambiente Docker
+Se a sua API estiver rodando via `docker-compose up`, execute o script acessando o container da aplicação (`api`):
+```bash
+docker-compose exec api npm run add-client <meu_client_id> <minha_senha_forte> "Descrição do Sistema"
+```
+
+### Ambiente Nativo (Local)
+Se estiver rodando nativamente na sua máquina (`npm run start:dev`):
+```bash
+npm run add-client <meu_client_id> <minha_senha_forte> "Descrição do Sistema"
+```
+
+*O script criptografará sua senha usando Bcrypt e gravará diretamente no banco de dados PostgreSQL.*
+
+---
+
 ## 📖 Documentação da API (Swagger)
 
 A API possui documentação auto-gerada que pode ser acessada visualmente através da interface do Swagger.
