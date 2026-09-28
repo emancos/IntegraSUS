@@ -1,5 +1,6 @@
-import { Injectable, Logger } from '@nestjs/common';
-import { Cron } from '@nestjs/schedule';
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { SchedulerRegistry } from '@nestjs/schedule';
+import { CronJob } from 'cron';
 import { DownloaderService } from '../downloader/downloader.service.js';
 import { ParserService } from '../parser/parser.service.js';
 import { ImporterService } from '../importer/importer.service.js';
@@ -12,26 +13,59 @@ import { Client } from 'basic-ftp';
 import AdmZip from 'adm-zip';
 import { execSync } from 'child_process';
 import _7zip from '7zip-bin';
-import { downloadFtpMultithreaded } from './ftp-downloader.js';
+import { downloadFtpMultithreaded, getLatestFtpFile } from './ftp-downloader.js';
 import { ProgressBar } from './progress.utils.js';
 
+export interface SyncConfig {
+  cnes_competence: string;
+  sia_competence: string;
+  cron_expression: string;
+  auto_sync_enabled: boolean;
+}
+
 @Injectable()
-export class SyncService {
+export class SyncService implements OnModuleInit {
   private readonly logger = new Logger(SyncService.name);
   private isSyncing = false;
+  private readonly configPath = path.join(process.cwd(), 'sync-config.json');
 
   constructor(
     private downloader: DownloaderService,
     private parser: ParserService,
+
     private importer: ImporterService,
     private cnesImporter: CnesImporterService,
-    private siaImporter: SiaImporterService
+    private siaImporter: SiaImporterService,
+    private schedulerRegistry: SchedulerRegistry
   ) { }
 
-  @Cron('0 5 * * *')
-  async handleCron() {
-    this.logger.log('Starting IntegraSUS daily sync via Cron...');
-    await this.runSync();
+  onModuleInit() {
+    this.configureCron();
+  }
+
+  public configureCron() {
+    const config = this.getConfig();
+    const jobName = 'dynamicSyncCron';
+
+    // Remove existing job if it exists
+    try {
+      this.schedulerRegistry.deleteCronJob(jobName);
+    } catch (e) {
+      // Ignore if job doesn't exist yet
+    }
+
+    if (config.auto_sync_enabled && config.cron_expression) {
+      const job = new CronJob(config.cron_expression, async () => {
+        this.logger.log('Starting IntegraSUS sync via Cron...');
+        await this.runSync();
+      });
+
+      this.schedulerRegistry.addCronJob(jobName, job);
+      job.start();
+      this.logger.log(`Sync cron scheduled with expression: ${config.cron_expression}`);
+    } else {
+      this.logger.log('Sync cron is disabled in configuration.');
+    }
   }
 
   async runSync() {
@@ -113,13 +147,30 @@ export class SyncService {
 
   private async syncCnes() {
     this.logger.log('Starting CNES Sync...');
-    const cnesZipPath = path.join(process.cwd(), 'BASE_DE_DADOS_CNES_202608.ZIP');
+    
+    // Dynamic fetching of latest CNES file
+    this.logger.log('Checking for latest CNES version on DATASUS FTP...');
+    const latestCnes = await getLatestFtpFile("ftp.datasus.gov.br", "cnes", /^BASE_DE_DADOS_CNES_(\d{6})\.ZIP$/i);
+    if (!latestCnes) {
+      this.logger.error('Could not find any CNES zip file on FTP.');
+      return;
+    }
+
+    const config = this.getConfig();
+    if (config.cnes_competence === latestCnes.competence) {
+      this.logger.log(`CNES is already up-to-date (Competence: ${latestCnes.competence}). Skipping download.`);
+      return;
+    }
+
+    this.logger.log(`Found latest CNES file: ${latestCnes.filename} (Competence: ${latestCnes.competence})`);
+
+    const cnesZipPath = path.join(process.cwd(), latestCnes.filename);
     const cnesExtractedPath = path.join(process.cwd(), 'temp_cnes');
 
     if (!fs.existsSync(cnesZipPath)) {
-      this.logger.log('Downloading CNES ZIP via FTP with 8 threads (Bypassing DATASUS WAF)...');
+      this.logger.log(`Downloading CNES ZIP (${latestCnes.filename}) via FTP with 8 threads...`);
       try {
-        await downloadFtpMultithreaded("ftp.datasus.gov.br", "cnes/BASE_DE_DADOS_CNES_202608.ZIP", cnesZipPath, 8);
+        await downloadFtpMultithreaded("ftp.datasus.gov.br", `cnes/${latestCnes.filename}`, cnesZipPath, 8);
         this.logger.log('Download CNES ZIP finished.');
       } catch (e) {
         this.logger.error('Failed to download CNES ZIP: ' + (e as Error).message);
@@ -137,20 +188,24 @@ export class SyncService {
 
       await this.cnesImporter.createTables();
 
-      const tbEstab = path.join(cnesExtractedPath, 'tbEstabelecimento202608.csv');
-      if (fs.existsSync(tbEstab)) await this.cnesImporter.importEstabelecimentos(tbEstab);
-
-      let tbProf = path.join(cnesExtractedPath, 'tbProfissional202608.csv');
-      if (!fs.existsSync(tbProf)) {
-        const files = fs.readdirSync(cnesExtractedPath);
-        const altFile = files.find(f => f.toLowerCase().startsWith('tbdadosprofissionalsus'));
-        if (altFile) {
-          tbProf = path.join(cnesExtractedPath, altFile);
-          this.logger.log(`Found alternative Profissionais file: ${altFile}`);
-        }
+      const files = fs.readdirSync(cnesExtractedPath);
+      
+      const altEstab = files.find(f => f.toLowerCase().startsWith('tbestabelecimento'));
+      if (altEstab) {
+        const tbEstab = path.join(cnesExtractedPath, altEstab);
+        await this.cnesImporter.importEstabelecimentos(tbEstab);
+      } else {
+        this.logger.warn('Estabelecimento CSV not found in the extracted CNES zip.');
       }
 
-      if (fs.existsSync(tbProf)) {
+      let tbProf = null;
+      const altFile = files.find(f => f.toLowerCase().startsWith('tbdadosprofissionalsus'));
+      if (altFile) {
+        tbProf = path.join(cnesExtractedPath, altFile);
+        this.logger.log(`Found alternative Profissionais file: ${altFile}`);
+      }
+
+      if (tbProf && fs.existsSync(tbProf)) {
         await this.cnesImporter.importProfissionais(tbProf);
       } else {
         this.logger.warn('Profissionais CSV not found in the extracted CNES zip.');
@@ -166,6 +221,7 @@ export class SyncService {
       }
 
       this.logger.log('CNES Sync completed successfully.');
+      this.updateConfig({ cnes_competence: latestCnes.competence });
     } else {
       this.logger.warn('CNES ZIP not found.');
     }
@@ -173,32 +229,34 @@ export class SyncService {
 
   private async syncSia() {
     this.logger.log('Starting SIA Sync...');
-    const siaZipPath = path.join(process.cwd(), 'BDSIA202609a.exe');
+    
+    // Dynamic fetching of latest SIA file
+    this.logger.log('Checking for latest SIA version on DATASUS FTP...');
+    const latestSia = await getLatestFtpFile("ftp.datasus.gov.br", "siasus/bdsia", /^BDSIA(\d{6}[a-z]?)\.exe$/i);
+    if (!latestSia) {
+      this.logger.error('Could not find any SIA exe file on FTP.');
+      return;
+    }
+
+    const config = this.getConfig();
+    if (config.sia_competence === latestSia.competence) {
+      this.logger.log(`SIA is already up-to-date (Competence: ${latestSia.competence}). Skipping download.`);
+      return;
+    }
+
+    this.logger.log(`Found latest SIA file: ${latestSia.filename} (Competence: ${latestSia.competence})`);
+
+    const siaZipPath = path.join(process.cwd(), latestSia.filename);
     const siaExtractedPath = path.join(process.cwd(), 'temp_sia');
 
     if (!fs.existsSync(siaZipPath)) {
-      this.logger.log('Downloading SIA EXE...');
+      this.logger.log(`Downloading SIA EXE (${latestSia.filename}) via FTP...`);
       try {
-        const url = 'https://github.com/RenatoKR/SIASUS/raw/main/bdsia/BDSIA202609a.exe';
-        const response = await axios({ url, method: 'GET', responseType: 'stream' });
-
-        const totalLength = parseInt((response.headers['content-length'] as string) || '0', 10);
-        const progressBar = new ProgressBar('Downloading SIA', totalLength);
-
-        const writer = fs.createWriteStream(siaZipPath);
-        response.data.on('data', (chunk: Buffer) => progressBar.add(chunk.length));
-        response.data.pipe(writer);
-
-        await new Promise<void>((resolve, reject) => {
-          writer.on('finish', () => {
-            progressBar.finish();
-            resolve();
-          });
-          writer.on('error', reject);
-        });
+        await downloadFtpMultithreaded("ftp.datasus.gov.br", `siasus/bdsia/${latestSia.filename}`, siaZipPath, 4);
         this.logger.log('Download SIA EXE finished.');
       } catch (e) {
         this.logger.error('Failed to download SIA EXE: ' + (e as Error).message);
+        try { if (fs.existsSync(siaZipPath)) fs.unlinkSync(siaZipPath); } catch (_) { }
         return;
       }
     }
@@ -231,11 +289,38 @@ export class SyncService {
         }
 
         this.logger.log('SIA Sync completed successfully.');
+        this.updateConfig({ sia_competence: latestSia.competence });
       } catch (err) {
         this.logger.error('Failed to extract/import SIA: ' + (err as Error).message);
       }
     } else {
       this.logger.warn('SIA EXE not found even after download.');
     }
+  }
+
+  public getConfig(): SyncConfig {
+    const defaultConfig: SyncConfig = {
+      cnes_competence: '',
+      sia_competence: '',
+      cron_expression: '0 2 * * 0', // Default: every Sunday at 2 AM
+      auto_sync_enabled: true
+    };
+    if (fs.existsSync(this.configPath)) {
+      try {
+        const data = fs.readFileSync(this.configPath, 'utf8');
+        return { ...defaultConfig, ...JSON.parse(data) };
+      } catch (e) {
+        this.logger.warn('Could not read sync-config.json, using defaults.');
+      }
+    }
+    return defaultConfig;
+  }
+
+  public updateConfig(partialConfig: Partial<SyncConfig>): SyncConfig {
+    const config = this.getConfig();
+    const newConfig = { ...config, ...partialConfig };
+    fs.writeFileSync(this.configPath, JSON.stringify(newConfig, null, 2), 'utf8');
+    this.configureCron(); // Apply new schedule
+    return newConfig;
   }
 }
