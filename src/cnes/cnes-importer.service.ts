@@ -152,7 +152,10 @@ export class CnesImporterService {
             this.logger.log('Creating indexes for Profissionais...');
             await queryRunner.query('CREATE INDEX IF NOT EXISTS idx_cnes_prof_cpf ON tb_cnes_profissionais_json(cpf)');
             await queryRunner.query('CREATE INDEX IF NOT EXISTS idx_cnes_prof_cns ON tb_cnes_profissionais_json(cns)');
-            await queryRunner.query('CREATE INDEX IF NOT EXISTS idx_cnes_prof_nome ON tb_cnes_profissionais_json(nome_busca)');
+            
+            // Optimization for large tables (7.8M+): use GIN index for fast LIKE '%nome%' queries
+            await queryRunner.query('CREATE EXTENSION IF NOT EXISTS pg_trgm');
+            await queryRunner.query('CREATE INDEX IF NOT EXISTS idx_cnes_prof_nome_trgm ON tb_cnes_profissionais_json USING GIN (nome_busca gin_trgm_ops)');
 
             this.logger.log(`Finished building ${processed} profissionais JSON documents.`);
             await queryRunner.release();
