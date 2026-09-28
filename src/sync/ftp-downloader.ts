@@ -5,7 +5,7 @@ import { ProgressBar } from './progress.utils.js';
 
 class RangeWriteStream extends Writable {
   private fd: number;
-  private pos: number;
+  public pos: number;
   private endByte: number;
   private totalWritten: number = 0;
   private onProgress: (bytes: number) => void;
@@ -72,7 +72,6 @@ export async function downloadFtpMultithreaded(
     const progressBar = new ProgressBar(`Downloading CNES (${threads} threads)`, size);
 
     const promises = [];
-    const clients: Client[] = [];
 
     for (let i = 0; i < threads; i++) {
       const start = i * chunkSize;
@@ -81,10 +80,7 @@ export async function downloadFtpMultithreaded(
       
       if (start > end) break;
 
-      const client = new Client();
-      clients.push(client);
-
-      promises.push(downloadChunk(client, host, remotePath, start, end, fdWrite, (bytes) => {
+      promises.push(downloadChunk(host, remotePath, start, end, fdWrite, (bytes) => {
         progressBar.add(bytes);
       }));
     }
@@ -93,9 +89,6 @@ export async function downloadFtpMultithreaded(
       await Promise.all(promises);
       progressBar.finish();
     } catch (err) {
-      clients.forEach(c => {
-        try { c.close(); } catch (e) {}
-      });
       throw err;
     } finally {
       fs.closeSync(fdWrite);
@@ -105,19 +98,42 @@ export async function downloadFtpMultithreaded(
   }
 }
 
-async function downloadChunk(client: Client, host: string, remotePath: string, start: number, end: number, fd: number, onProgress: (bytes: number) => void) {
-  try {
-    await client.access({ host });
-    const rangeStream = new RangeWriteStream(fd, start, end, onProgress);
-    
+async function downloadChunk(host: string, remotePath: string, start: number, end: number, fd: number, onProgress: (bytes: number) => void) {
+  let currentStart = start;
+  let retries = 0;
+  
+  while (currentStart <= end) {
+    const client = new Client();
     try {
-      await client.downloadTo(rangeStream, remotePath, start);
-    } catch (e: any) {
-      if (e.message !== 'RANGE_DONE') {
-        throw e;
+      await client.access({ host });
+      const rangeStream = new RangeWriteStream(fd, currentStart, end, onProgress);
+      
+      try {
+        await client.downloadTo(rangeStream, remotePath, currentStart);
+      } catch (e: any) {
+        if (e.message !== 'RANGE_DONE') {
+          console.error(`\n[Chunk ${start}-${end}] FTP Error at ${currentStart}: ${e.message}`);
+        }
       }
+      
+      if (rangeStream.pos > end) {
+        break; // Chunk finished completely
+      }
+      
+      currentStart = rangeStream.pos;
+      retries++;
+      if (retries > 20) {
+        throw new Error(`Failed to download chunk after 20 retries. Stopped at ${currentStart}/${end}`);
+      }
+      
+      // Wait a bit before reconnecting
+      await new Promise(r => setTimeout(r, 2000));
+    } catch (err) {
+      retries++;
+      if (retries > 20) throw err;
+      await new Promise(r => setTimeout(r, 2000));
+    } finally {
+      try { client.close(); } catch(e) {}
     }
-  } finally {
-    client.close();
   }
 }
