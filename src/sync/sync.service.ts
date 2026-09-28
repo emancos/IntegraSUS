@@ -26,7 +26,7 @@ export class SyncService {
     private importer: ImporterService,
     private cnesImporter: CnesImporterService,
     private siaImporter: SiaImporterService
-  ) {}
+  ) { }
 
   @Cron('0 5 * * *')
   async handleCron() {
@@ -36,23 +36,23 @@ export class SyncService {
 
   async runSync() {
     if (this.isSyncing) {
-        this.logger.warn('Sync is already running.');
-        return;
+      this.logger.warn('Sync is already running.');
+      return;
     }
-    
+
     this.isSyncing = true;
-    
+
     try {
       const githubUrl = 'https://api.github.com/repos/RenatoKR/SIGTAP/contents/tabelas';
       const { data } = await axios.get(githubUrl);
-      
+
       const zipFiles = data.filter((f: any) => f.name.endsWith('.zip'));
       if (zipFiles.length === 0) {
         this.logger.warn('No zip files found on GitHub repo.');
         this.isSyncing = false;
         return;
       }
-      
+
       zipFiles.sort((a: any, b: any) => b.name.localeCompare(a.name));
       const latestZip = zipFiles[0];
       const downloadUrl = latestZip.download_url;
@@ -66,7 +66,7 @@ export class SyncService {
       for (const layoutFile of layoutFiles) {
         const dataFile = layoutFile.replace('_layout.txt', '.txt');
         const tableName = layoutFile.replace('_layout.txt', '').toLowerCase();
-        
+
         const layoutFullPath = path.join(extractPath, layoutFile);
         const dataFullPath = path.join(extractPath, dataFile);
 
@@ -77,12 +77,12 @@ export class SyncService {
 
         const layout = this.parser.parseLayout(layoutFullPath);
         const dataRows = this.parser.parseData(dataFullPath, layout);
-        
+
         await this.importer.importTable(tableName, layout, dataRows);
       }
 
       await this.importer.buildJsonDocuments();
-      
+
       this.logger.log('Limpando diretório temporário SIGTAP...');
       fs.rmSync(destPath, { recursive: true, force: true });
       this.logger.log('SIGTAP Sync completed successfully.');
@@ -109,10 +109,11 @@ export class SyncService {
     if (!fs.existsSync(cnesZipPath)) {
       this.logger.log('Downloading CNES ZIP via FTP with 4 threads (Bypassing DATASUS WAF)...');
       try {
-        await downloadFtpMultithreaded("ftp.datasus.gov.br", "cnes/BASE_DE_DADOS_CNES_202608.ZIP", cnesZipPath, 4);
+        await downloadFtpMultithreaded("ftp.datasus.gov.br", "cnes/BASE_DE_DADOS_CNES_202608.ZIP", cnesZipPath, 8);
         this.logger.log('Download CNES ZIP finished.');
       } catch (e) {
         this.logger.error('Failed to download CNES ZIP: ' + (e as Error).message);
+        try { if (fs.existsSync(cnesZipPath)) fs.unlinkSync(cnesZipPath); } catch (_) {}
         return;
       }
     }
@@ -120,12 +121,12 @@ export class SyncService {
     if (fs.existsSync(cnesZipPath)) {
       this.logger.log('Extracting CNES ZIP...');
       if (!fs.existsSync(cnesExtractedPath)) fs.mkdirSync(cnesExtractedPath);
-      
+
       const zip = new AdmZip(cnesZipPath);
       zip.extractAllTo(cnesExtractedPath, true);
 
       await this.cnesImporter.createTables();
-      
+
       const tbEstab = path.join(cnesExtractedPath, 'tbEstabelecimento202608.csv');
       if (fs.existsSync(tbEstab)) await this.cnesImporter.importEstabelecimentos(tbEstab);
 
@@ -140,7 +141,7 @@ export class SyncService {
       } catch (cleanupErr) {
         this.logger.warn('Aviso: Não foi possível remover os arquivos temporários do CNES agora. ' + (cleanupErr as Error).message);
       }
-      
+
       this.logger.log('CNES Sync completed successfully.');
     } else {
       this.logger.warn('CNES ZIP not found.');
@@ -157,14 +158,14 @@ export class SyncService {
       try {
         const url = 'https://github.com/RenatoKR/SIASUS/raw/main/bdsia/BDSIA202609a.exe';
         const response = await axios({ url, method: 'GET', responseType: 'stream' });
-        
+
         const totalLength = parseInt((response.headers['content-length'] as string) || '0', 10);
         const progressBar = new ProgressBar('Downloading SIA', totalLength);
-        
+
         const writer = fs.createWriteStream(siaZipPath);
         response.data.on('data', (chunk: Buffer) => progressBar.add(chunk.length));
         response.data.pipe(writer);
-        
+
         await new Promise<void>((resolve, reject) => {
           writer.on('finish', () => {
             progressBar.finish();
@@ -182,11 +183,11 @@ export class SyncService {
     if (fs.existsSync(siaZipPath)) {
       this.logger.log('Extracting SIA EXE via 7zip-bin...');
       if (!fs.existsSync(siaExtractedPath)) fs.mkdirSync(siaExtractedPath);
-      
+
       try {
         const path7za = _7zip.path7za;
         execSync(`"${path7za}" x "${siaZipPath}" -o"${siaExtractedPath}" -y`);
-        
+
         await this.siaImporter.createTables();
 
         const realCidPath = path.join(siaExtractedPath, 'S_CID.DBF');
@@ -205,7 +206,7 @@ export class SyncService {
         } catch (cleanupErr) {
           this.logger.warn('Aviso: Não foi possível remover os arquivos temporários do SIA agora. ' + (cleanupErr as Error).message);
         }
-        
+
         this.logger.log('SIA Sync completed successfully.');
       } catch (err) {
         this.logger.error('Failed to extract/import SIA: ' + (err as Error).message);

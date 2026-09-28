@@ -72,6 +72,7 @@ export async function downloadFtpMultithreaded(
     const progressBar = new ProgressBar(`Downloading CNES (${threads} threads)`, size);
 
     const promises = [];
+    const clients: Client[] = [];
 
     for (let i = 0; i < threads; i++) {
       const start = i * chunkSize;
@@ -80,25 +81,33 @@ export async function downloadFtpMultithreaded(
       
       if (start > end) break;
 
-      promises.push(downloadChunk(host, remotePath, start, end, fdWrite, (bytes) => {
+      const client = new Client();
+      clients.push(client);
+
+      promises.push(downloadChunk(client, host, remotePath, start, end, fdWrite, (bytes) => {
         progressBar.add(bytes);
       }));
     }
 
-    await Promise.all(promises);
-    progressBar.finish();
-    fs.closeSync(fdWrite);
-    
+    try {
+      await Promise.all(promises);
+      progressBar.finish();
+    } catch (err) {
+      clients.forEach(c => {
+        try { c.close(); } catch (e) {}
+      });
+      throw err;
+    } finally {
+      fs.closeSync(fdWrite);
+    }
   } catch (err) {
     throw err;
   }
 }
 
-async function downloadChunk(host: string, remotePath: string, start: number, end: number, fd: number, onProgress: (bytes: number) => void) {
-  const client = new Client();
+async function downloadChunk(client: Client, host: string, remotePath: string, start: number, end: number, fd: number, onProgress: (bytes: number) => void) {
   try {
     await client.access({ host });
-    
     const rangeStream = new RangeWriteStream(fd, start, end, onProgress);
     
     try {
