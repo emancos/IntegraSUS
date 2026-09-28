@@ -15,6 +15,17 @@ if (!clientId || !clientSecret) {
 const c = new Client({ connectionString: process.env.DATABASE_URL });
 c.connect().then(async () => {
   try {
+    // Garante que a tabela existe
+    await c.query(`
+      CREATE TABLE IF NOT EXISTS tb_clients (
+        id SERIAL PRIMARY KEY,
+        client_id VARCHAR(50) UNIQUE NOT NULL,
+        client_secret VARCHAR(255) NOT NULL,
+        description VARCHAR(255),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
     const hashedSecret = await bcrypt.hash(clientSecret, 10);
     await c.query('INSERT INTO tb_clients (client_id, client_secret, description) VALUES ($1, $2, $3)', [clientId, hashedSecret, desc]);
     console.log(`\n✅ Sucesso! Cliente autorizado no banco.`);
