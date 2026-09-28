@@ -133,8 +133,13 @@ export class SyncService {
       if (fs.existsSync(tbProf)) await this.cnesImporter.importProfissionais(tbProf);
 
       this.logger.log('Limpando diretório temporário CNES...');
-      fs.rmSync(cnesExtractedPath, { recursive: true, force: true });
-      fs.unlinkSync(cnesZipPath);
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      try {
+        fs.rmSync(cnesExtractedPath, { recursive: true, force: true });
+        fs.unlinkSync(cnesZipPath);
+      } catch (cleanupErr) {
+        this.logger.warn('Aviso: Não foi possível remover os arquivos temporários do CNES agora. ' + (cleanupErr as Error).message);
+      }
       
       this.logger.log('CNES Sync completed successfully.');
     } else {
@@ -192,9 +197,15 @@ export class SyncService {
         }
 
         this.logger.log('Limpando diretório temporário SIA...');
-        fs.rmSync(siaExtractedPath, { recursive: true, force: true });
-        // Optional: delete the EXE after successful extraction
-        fs.unlinkSync(siaZipPath);
+        // Windows often locks files for a few milliseconds after closing streams. Wait before deleting.
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        try {
+          fs.rmSync(siaExtractedPath, { recursive: true, force: true });
+          fs.unlinkSync(siaZipPath);
+        } catch (cleanupErr) {
+          this.logger.warn('Aviso: Não foi possível remover os arquivos temporários do SIA agora. ' + (cleanupErr as Error).message);
+        }
+        
         this.logger.log('SIA Sync completed successfully.');
       } catch (err) {
         this.logger.error('Failed to extract/import SIA: ' + (err as Error).message);
