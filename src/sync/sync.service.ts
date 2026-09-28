@@ -43,13 +43,32 @@ export class SyncService {
     this.isSyncing = true;
 
     try {
+      // Iniciar CNES Sync
+      await this.syncCnes();
+
+      // Iniciar SIGTAP Sync
+      await this.syncSigtap();
+
+      // Iniciar SIA Sync
+      await this.syncSia();
+
+      this.logger.log('IntegraSUS Sync completed successfully.');
+    } catch (e) {
+      this.logger.error('Error during IntegraSUS Sync: ' + (e as Error).message);
+    } finally {
+      this.isSyncing = false;
+    }
+  }
+
+  private async syncSigtap() {
+    this.logger.log('Starting SIGTAP Sync...');
+    try {
       const githubUrl = 'https://api.github.com/repos/RenatoKR/SIGTAP/contents/tabelas';
       const { data } = await axios.get(githubUrl);
 
       const zipFiles = data.filter((f: any) => f.name.endsWith('.zip'));
       if (zipFiles.length === 0) {
         this.logger.warn('No zip files found on GitHub repo.');
-        this.isSyncing = false;
         return;
       }
 
@@ -86,18 +105,9 @@ export class SyncService {
       this.logger.log('Limpando diretório temporário SIGTAP...');
       fs.rmSync(destPath, { recursive: true, force: true });
       this.logger.log('SIGTAP Sync completed successfully.');
-
-      // Iniciar SIA Sync
-      await this.syncSia();
-
-      // Iniciar CNES Sync (por último, pois o FTP do Datasus é instável)
-      await this.syncCnes();
-
-      this.logger.log('IntegraSUS Sync completed successfully.');
     } catch (e) {
-      this.logger.error('Error during IntegraSUS Sync: ' + (e as Error).message);
-    } finally {
-      this.isSyncing = false;
+      this.logger.error('Error during SIGTAP Sync: ' + (e as Error).message);
+      throw e;
     }
   }
 
