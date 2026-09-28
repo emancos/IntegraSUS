@@ -140,8 +140,21 @@ export class SyncService {
       const tbEstab = path.join(cnesExtractedPath, 'tbEstabelecimento202608.csv');
       if (fs.existsSync(tbEstab)) await this.cnesImporter.importEstabelecimentos(tbEstab);
 
-      const tbProf = path.join(cnesExtractedPath, 'tbProfissional202608.csv');
-      if (fs.existsSync(tbProf)) await this.cnesImporter.importProfissionais(tbProf);
+      let tbProf = path.join(cnesExtractedPath, 'tbProfissional202608.csv');
+      if (!fs.existsSync(tbProf)) {
+        const files = fs.readdirSync(cnesExtractedPath);
+        const altFile = files.find(f => f.toLowerCase().startsWith('tbdadosprofissionalsus'));
+        if (altFile) {
+          tbProf = path.join(cnesExtractedPath, altFile);
+          this.logger.log(`Found alternative Profissionais file: ${altFile}`);
+        }
+      }
+
+      if (fs.existsSync(tbProf)) {
+        await this.cnesImporter.importProfissionais(tbProf);
+      } else {
+        this.logger.warn('Profissionais CSV not found in the extracted CNES zip.');
+      }
 
       this.logger.log('Limpando diretório temporário CNES...');
       await new Promise(resolve => setTimeout(resolve, 1000));
