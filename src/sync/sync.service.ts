@@ -117,13 +117,13 @@ export class SyncService {
     const cnesExtractedPath = path.join(process.cwd(), 'temp_cnes');
 
     if (!fs.existsSync(cnesZipPath)) {
-      this.logger.log('Downloading CNES ZIP via FTP with 4 threads (Bypassing DATASUS WAF)...');
+      this.logger.log('Downloading CNES ZIP via FTP with 8 threads (Bypassing DATASUS WAF)...');
       try {
         await downloadFtpMultithreaded("ftp.datasus.gov.br", "cnes/BASE_DE_DADOS_CNES_202608.ZIP", cnesZipPath, 8);
         this.logger.log('Download CNES ZIP finished.');
       } catch (e) {
         this.logger.error('Failed to download CNES ZIP: ' + (e as Error).message);
-        try { if (fs.existsSync(cnesZipPath)) fs.unlinkSync(cnesZipPath); } catch (_) {}
+        try { if (fs.existsSync(cnesZipPath)) fs.unlinkSync(cnesZipPath); } catch (_) { }
         return;
       }
     }
