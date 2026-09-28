@@ -12,6 +12,8 @@ import { Client } from 'basic-ftp';
 import AdmZip from 'adm-zip';
 import { execSync } from 'child_process';
 import _7zip from '7zip-bin';
+import { downloadFtpMultithreaded } from './ftp-downloader.js';
+import { ProgressBar } from './progress.utils.js';
 
 @Injectable()
 export class SyncService {
@@ -105,19 +107,13 @@ export class SyncService {
     const cnesExtractedPath = path.join(process.cwd(), 'temp_cnes');
 
     if (!fs.existsSync(cnesZipPath)) {
-      this.logger.log('Downloading CNES ZIP via FTP (Bypassing DATASUS WAF)...');
-      const client = new Client();
+      this.logger.log('Downloading CNES ZIP via FTP with 8 threads (Bypassing DATASUS WAF)...');
       try {
-        await client.access({
-          host: "ftp.datasus.gov.br",
-        });
-        await client.downloadTo(cnesZipPath, "cnes/BASE_DE_DADOS_CNES_202608.ZIP");
+        await downloadFtpMultithreaded("ftp.datasus.gov.br", "cnes/BASE_DE_DADOS_CNES_202608.ZIP", cnesZipPath, 8);
         this.logger.log('Download CNES ZIP finished.');
       } catch (e) {
         this.logger.error('Failed to download CNES ZIP: ' + (e as Error).message);
         return;
-      } finally {
-        client.close();
       }
     }
 
@@ -156,10 +152,19 @@ export class SyncService {
       try {
         const url = 'https://github.com/RenatoKR/SIASUS/raw/main/bdsia/BDSIA202609a.exe';
         const response = await axios({ url, method: 'GET', responseType: 'stream' });
+        
+        const totalLength = parseInt((response.headers['content-length'] as string) || '0', 10);
+        const progressBar = new ProgressBar('Downloading SIA', totalLength);
+        
         const writer = fs.createWriteStream(siaZipPath);
+        response.data.on('data', (chunk: Buffer) => progressBar.add(chunk.length));
         response.data.pipe(writer);
+        
         await new Promise<void>((resolve, reject) => {
-          writer.on('finish', () => resolve());
+          writer.on('finish', () => {
+            progressBar.finish();
+            resolve();
+          });
           writer.on('error', reject);
         });
         this.logger.log('Download SIA EXE finished.');

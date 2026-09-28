@@ -30,12 +30,13 @@ export class SiaImporterService {
     
     let batch: any[] = [];
     let processed = 0;
+    let insertPromise = Promise.resolve();
 
     return new Promise<void>((resolve, reject) => {
       // @ts-ignore
       const parser = new (Parser.default || Parser)(dbfPath, { encoding: 'latin1' });
       
-      parser.on('record', async (record: any) => {
+      parser.on('record', (record: any) => {
         // According to standard DATASUS CID.DBF: CID (or CD_CID) and NO_CID (or DESC_CID)
         const codigo = (record.CD_CID || record.CID || record.CD_CODIGO || '').trim();
         const descricao = (record.NO_CID || record.NM_CID || record.DESC_CID || record.DS_NOME || '').trim();
@@ -49,19 +50,23 @@ export class SiaImporterService {
           const currentBatch = [...batch];
           batch = [];
           processed += currentBatch.length;
-          await this.insertCidsBatch(queryRunner, currentBatch);
-          parser.resume();
+          insertPromise = insertPromise.then(async () => {
+            await this.insertCidsBatch(queryRunner, currentBatch);
+            parser.resume();
+          }).catch(reject);
         }
       });
 
-      parser.on('end', async () => {
-        if (batch.length > 0) {
-          await this.insertCidsBatch(queryRunner, batch);
-          processed += batch.length;
-        }
-        this.logger.log(`Finished importing ${processed} CIDs from DBF.`);
-        await queryRunner.release();
-        resolve();
+      parser.on('end', () => {
+        insertPromise.then(async () => {
+          if (batch.length > 0) {
+            await this.insertCidsBatch(queryRunner, batch);
+            processed += batch.length;
+          }
+          this.logger.log(`Finished importing ${processed} CIDs from DBF.`);
+          await queryRunner.release();
+          resolve();
+        }).catch(reject);
       });
 
       parser.on('error', (err: any) => {

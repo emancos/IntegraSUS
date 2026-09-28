@@ -43,28 +43,35 @@ export class CnesImporterService {
     
     let batch: any[] = [];
     let processed = 0;
+    let insertPromise = Promise.resolve();
 
     return new Promise<void>((resolve, reject) => {
-      fs.createReadStream(csvPath, { encoding: 'latin1' })
-        .pipe(csv({ separator: ';' }))
-        .on('data', async (row) => {
+      const stream = fs.createReadStream(csvPath, { encoding: 'latin1' }).pipe(csv({ separator: ';' }));
+      
+      stream.on('data', (row) => {
           batch.push(row);
           if (batch.length >= 1000) {
+            stream.pause();
             const currentBatch = [...batch];
             batch = [];
             processed += currentBatch.length;
-            await this.insertEstabelecimentosBatch(queryRunner, currentBatch);
-            if (processed % 10000 === 0) this.logger.log(`Imported ${processed} estabelecimentos...`);
+            insertPromise = insertPromise.then(async () => {
+              await this.insertEstabelecimentosBatch(queryRunner, currentBatch);
+              if (processed % 10000 === 0) this.logger.log(`Imported ${processed} estabelecimentos...`);
+              stream.resume();
+            }).catch(reject);
           }
         })
-        .on('end', async () => {
-          if (batch.length > 0) {
-            await this.insertEstabelecimentosBatch(queryRunner, batch);
-            processed += batch.length;
-          }
-          this.logger.log(`Finished importing ${processed} estabelecimentos.`);
-          await queryRunner.release();
-          resolve();
+        .on('end', () => {
+          insertPromise.then(async () => {
+            if (batch.length > 0) {
+              await this.insertEstabelecimentosBatch(queryRunner, batch);
+              processed += batch.length;
+            }
+            this.logger.log(`Finished importing ${processed} estabelecimentos.`);
+            await queryRunner.release();
+            resolve();
+          }).catch(reject);
         })
         .on('error', (err) => reject(err));
     });
@@ -110,34 +117,41 @@ export class CnesImporterService {
     
     let batch: any[] = [];
     let processed = 0;
+    let insertPromise = Promise.resolve();
 
     return new Promise<void>((resolve, reject) => {
-      fs.createReadStream(csvPath, { encoding: 'latin1' })
-        .pipe(csv({ separator: ';' }))
-        .on('data', async (row) => {
+      const stream = fs.createReadStream(csvPath, { encoding: 'latin1' }).pipe(csv({ separator: ';' }));
+      
+      stream.on('data', (row) => {
           batch.push(row);
           if (batch.length >= 1000) {
+            stream.pause();
             const currentBatch = [...batch];
             batch = [];
             processed += currentBatch.length;
-            await this.insertProfissionaisBatch(queryRunner, currentBatch, estabMap);
-            if (processed % 10000 === 0) this.logger.log(`Imported ${processed} profissionais...`);
+            insertPromise = insertPromise.then(async () => {
+              await this.insertProfissionaisBatch(queryRunner, currentBatch, estabMap);
+              if (processed % 10000 === 0) this.logger.log(`Imported ${processed} profissionais...`);
+              stream.resume();
+            }).catch(reject);
           }
         })
-        .on('end', async () => {
-          if (batch.length > 0) {
-            await this.insertProfissionaisBatch(queryRunner, batch, estabMap);
-            processed += batch.length;
-          }
-          
-          this.logger.log('Creating indexes for Profissionais...');
-          await queryRunner.query('CREATE INDEX IF NOT EXISTS idx_cnes_prof_cpf ON tb_cnes_profissionais_json(cpf)');
-          await queryRunner.query('CREATE INDEX IF NOT EXISTS idx_cnes_prof_cns ON tb_cnes_profissionais_json(cns)');
-          await queryRunner.query('CREATE INDEX IF NOT EXISTS idx_cnes_prof_nome ON tb_cnes_profissionais_json(nome_busca)');
+        .on('end', () => {
+          insertPromise.then(async () => {
+            if (batch.length > 0) {
+              await this.insertProfissionaisBatch(queryRunner, batch, estabMap);
+              processed += batch.length;
+            }
+            
+            this.logger.log('Creating indexes for Profissionais...');
+            await queryRunner.query('CREATE INDEX IF NOT EXISTS idx_cnes_prof_cpf ON tb_cnes_profissionais_json(cpf)');
+            await queryRunner.query('CREATE INDEX IF NOT EXISTS idx_cnes_prof_cns ON tb_cnes_profissionais_json(cns)');
+            await queryRunner.query('CREATE INDEX IF NOT EXISTS idx_cnes_prof_nome ON tb_cnes_profissionais_json(nome_busca)');
 
-          this.logger.log(`Finished building ${processed} profissionais JSON documents.`);
-          await queryRunner.release();
-          resolve();
+            this.logger.log(`Finished building ${processed} profissionais JSON documents.`);
+            await queryRunner.release();
+            resolve();
+          }).catch(reject);
         })
         .on('error', (err) => reject(err));
     });
