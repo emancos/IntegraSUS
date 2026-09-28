@@ -137,3 +137,34 @@ async function downloadChunk(host: string, remotePath: string, start: number, en
     }
   }
 }
+
+export async function getLatestFtpFile(
+  host: string,
+  dir: string,
+  regex: RegExp
+): Promise<{ filename: string; competence: string } | null> {
+  const client = new Client();
+  try {
+    await client.access({ host });
+    const list = await client.list(dir);
+    
+    let latestFile: { filename: string; competence: string } | null = null;
+    let maxCompetence = '';
+
+    for (const file of list) {
+      if (file.type !== 1) continue; // 1 = File
+      const match = file.name.match(regex);
+      if (match && match[1]) {
+        const competence = match[1];
+        if (competence > maxCompetence) {
+          maxCompetence = competence;
+          latestFile = { filename: file.name, competence };
+        }
+      }
+    }
+
+    return latestFile;
+  } finally {
+    try { client.close(); } catch(e) {}
+  }
+}
