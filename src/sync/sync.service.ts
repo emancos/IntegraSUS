@@ -8,7 +8,10 @@ import { SiaImporterService } from '../sia/sia-importer.service.js';
 import * as path from 'path';
 import * as fs from 'fs';
 import axios from 'axios';
+import { Client } from 'basic-ftp';
 import AdmZip from 'adm-zip';
+import { execSync } from 'child_process';
+import _7zip from '7zip-bin';
 
 @Injectable()
 export class SyncService {
@@ -102,28 +105,19 @@ export class SyncService {
     const cnesExtractedPath = path.join(process.cwd(), 'temp_cnes');
 
     if (!fs.existsSync(cnesZipPath)) {
-      this.logger.log('Downloading CNES ZIP...');
+      this.logger.log('Downloading CNES ZIP via FTP (Bypassing DATASUS WAF)...');
+      const client = new Client();
       try {
-        const url = 'https://cnes.datasus.gov.br/EstatisticasServlet?path=BASE_DE_DADOS_CNES_202608.ZIP';
-        const response = await axios({
-          url,
-          method: 'GET',
-          responseType: 'stream',
-          headers: {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
-            'Accept': '*/*'
-          }
+        await client.access({
+          host: "ftp.datasus.gov.br",
         });
-        const writer = fs.createWriteStream(cnesZipPath);
-        response.data.pipe(writer);
-        await new Promise<void>((resolve, reject) => {
-          writer.on('finish', () => resolve());
-          writer.on('error', reject);
-        });
+        await client.downloadTo(cnesZipPath, "cnes/BASE_DE_DADOS_CNES_202608.ZIP");
         this.logger.log('Download CNES ZIP finished.');
       } catch (e) {
         this.logger.error('Failed to download CNES ZIP: ' + (e as Error).message);
         return;
+      } finally {
+        client.close();
       }
     }
 
@@ -180,8 +174,7 @@ export class SyncService {
       if (!fs.existsSync(siaExtractedPath)) fs.mkdirSync(siaExtractedPath);
       
       try {
-        const { path7za } = require('7zip-bin');
-        const { execSync } = require('child_process');
+        const path7za = _7zip.path7za;
         execSync(`"${path7za}" x "${siaZipPath}" -o"${siaExtractedPath}" -y`);
         
         await this.siaImporter.createTables();
