@@ -119,11 +119,11 @@ export class SyncService {
     }
 
     if (fs.existsSync(cnesZipPath)) {
-      this.logger.log('Extracting CNES ZIP...');
+      this.logger.log('Extracting CNES ZIP via 7zip-bin...');
       if (!fs.existsSync(cnesExtractedPath)) fs.mkdirSync(cnesExtractedPath);
 
-      const zip = new AdmZip(cnesZipPath);
-      zip.extractAllTo(cnesExtractedPath, true);
+      const path7za = _7zip.path7za;
+      execSync(`"${path7za}" x "${cnesZipPath}" -o"${cnesExtractedPath}" -y`);
 
       await this.cnesImporter.createTables();
 
