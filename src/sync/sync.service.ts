@@ -87,11 +87,11 @@ export class SyncService {
       fs.rmSync(destPath, { recursive: true, force: true });
       this.logger.log('SIGTAP Sync completed successfully.');
 
-      // Iniciar CNES Sync
-      await this.syncCnes();
-
       // Iniciar SIA Sync
       await this.syncSia();
+
+      // Iniciar CNES Sync (por último, pois o FTP do Datasus é instável)
+      await this.syncCnes();
 
       this.logger.log('IntegraSUS Sync completed successfully.');
     } catch (e) {
@@ -107,9 +107,9 @@ export class SyncService {
     const cnesExtractedPath = path.join(process.cwd(), 'temp_cnes');
 
     if (!fs.existsSync(cnesZipPath)) {
-      this.logger.log('Downloading CNES ZIP via FTP with 8 threads (Bypassing DATASUS WAF)...');
+      this.logger.log('Downloading CNES ZIP via FTP with 4 threads (Bypassing DATASUS WAF)...');
       try {
-        await downloadFtpMultithreaded("ftp.datasus.gov.br", "cnes/BASE_DE_DADOS_CNES_202608.ZIP", cnesZipPath, 8);
+        await downloadFtpMultithreaded("ftp.datasus.gov.br", "cnes/BASE_DE_DADOS_CNES_202608.ZIP", cnesZipPath, 4);
         this.logger.log('Download CNES ZIP finished.');
       } catch (e) {
         this.logger.error('Failed to download CNES ZIP: ' + (e as Error).message);
