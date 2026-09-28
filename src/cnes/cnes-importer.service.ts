@@ -31,9 +31,14 @@ export class CnesImporterService {
       )
     `);
     
-    // Clear them
+    // Clear tables and drop indexes before bulk insert to massively speed up insertion!
     await this.dataSource.query('TRUNCATE TABLE tb_cnes_estabelecimentos');
     await this.dataSource.query('TRUNCATE TABLE tb_cnes_profissionais_json');
+    
+    this.logger.log('Dropping existing indexes to optimize bulk insert...');
+    await this.dataSource.query('DROP INDEX IF EXISTS idx_cnes_prof_cpf');
+    await this.dataSource.query('DROP INDEX IF EXISTS idx_cnes_prof_cns');
+    await this.dataSource.query('DROP INDEX IF EXISTS idx_cnes_prof_nome_trgm');
   }
 
   async importEstabelecimentos(csvPath: string) {
@@ -124,7 +129,8 @@ export class CnesImporterService {
       
       stream.on('data', (row) => {
           batch.push(row);
-          if (batch.length >= 1000) {
+          // Increased batch size from 1000 to 5000 for massive reduction in DB round-trips
+          if (batch.length >= 5000) {
             stream.pause();
             const currentBatch = [...batch];
             batch = [];
