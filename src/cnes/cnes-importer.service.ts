@@ -166,17 +166,23 @@ export class CnesImporterService {
     const params = [];
     let i = 1;
     for (const r of rows) {
-      const cns = (r.CO_PROFISSIONAL_SUS || '').trim();
-      let cpf = (r.NU_CPF || '').trim();
+      // Corrected mapping based on tbDadosProfissionalSus columns
+      const hashProfissional = (r.CO_PROFISSIONAL_SUS || '').trim();
+      const cns = (r.CO_CNS || r.CO_PROFISSIONAL_SUS || '').trim(); // Fallback if old format
+      let cpf = (r.CO_CPF || r.NU_CPF || '').trim();
       const nome = (r.NO_PROFISSIONAL || '').trim();
       
-      // se n tiver na tbProfissional, tenta tbDadosProfissional
       if (!nome) continue; 
       
       const cnes_est = (r.CO_CNES || r.CO_UNIDADE || '').trim();
       const estab = estabMap.get(cnes_est) || {};
       
-      const cpf_mascarado = cpf ? cpf.substring(0,3) + '.***.***-' + cpf.substring(9,11) : '';
+      // Datasus already masks CPF in the public base (e.g. XXX.123.456.XX). 
+      // We only apply our mask if it doesn't contain 'X'.
+      let cpf_mascarado = cpf;
+      if (cpf && !cpf.includes('X') && cpf.length === 11) {
+        cpf_mascarado = cpf.substring(0,3) + '.***.***-' + cpf.substring(9,11);
+      }
 
       const doc = {
         nome: nome,
