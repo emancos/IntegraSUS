@@ -179,12 +179,11 @@ export class SyncService {
         
         await this.siaImporter.createTables();
 
-        const cidPath = path.join(siaExtractedPath, 'CADMUN.DBF'); 
-        const realCidPath = path.join(siaExtractedPath, 'CID.DBF');
+        const realCidPath = path.join(siaExtractedPath, 'S_CID.DBF');
         if (fs.existsSync(realCidPath)) {
           await this.siaImporter.importCids(realCidPath);
-        } else if (fs.existsSync(cidPath)) {
-          this.logger.warn('CID.DBF not found in extracted SIA files. (Only test CADMUN found)');
+        } else {
+          this.logger.warn('S_CID.DBF not found in extracted SIA files.');
         }
 
         this.logger.log('Limpando diretório temporário SIA...');
