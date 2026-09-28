@@ -25,7 +25,7 @@ export class SyncController {
   constructor(private readonly syncService: SyncService) {}
 
   @Post('trigger')
-  @ApiOperation({ summary: 'Disparar sincronização completa do SIGTAP' })
+  @ApiOperation({ summary: 'Disparar sincronização completa do dos dados em saúde' })
   @ApiResponse({ status: 201, description: 'Processo de sincronização iniciado em background.' })
   triggerSync() {
     this.syncService.runSync();
