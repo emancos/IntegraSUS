@@ -80,6 +80,10 @@ export class ImporterService {
       await queryRunner.query(`DROP TABLE IF EXISTS tb_procedimento_json CASCADE`);
       await queryRunner.query(`CREATE TABLE tb_procedimento_json (codigo VARCHAR(10) PRIMARY KEY, nome VARCHAR(255), documento JSONB)`);
 
+      this.logger.log('Creating index tree for SIGTAP Procedimentos...');
+      await queryRunner.query('CREATE EXTENSION IF NOT EXISTS pg_trgm');
+      await queryRunner.query('CREATE INDEX IF NOT EXISTS idx_procedimento_nome_trgm ON tb_procedimento_json USING GIN (nome gin_trgm_ops)');
+
       const BASE_SELECT = `
         p.*,
         g."NO_GRUPO",

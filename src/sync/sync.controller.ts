@@ -33,8 +33,8 @@ export class SyncController {
   constructor(private readonly syncService: SyncService) {}
 
   @Post('trigger')
-  @ApiOperation({ summary: 'Disparar sincronização completa do dos dados em saúde' })
-  @ApiResponse({ status: 201, description: 'Processo de sincronização iniciado em background.' })
+  @ApiOperation({ summary: 'Disparar sincronização completa de todos os dados em saúde' })
+  @ApiResponse({ status: 201, description: 'Processo de sincronização completo iniciado em background.' })
   @ApiResponse({ status: 200, description: 'A base de dados já está totalmente atualizada.' })
   async triggerSync(@Body() body: TriggerSyncDto) {
     if (!body?.force) {
@@ -44,8 +44,56 @@ export class SyncController {
       }
     }
     
-    this.syncService.runSync(body?.force);
-    return { message: 'Sincronização iniciada em background.' };
+    this.syncService.runSync(body?.force).catch(e => console.error(e));
+    return { message: 'Sincronização completa iniciada em background.' };
+  }
+
+  @Post('cnes/trigger')
+  @ApiOperation({ summary: 'Disparar sincronização apenas do CNES' })
+  @ApiResponse({ status: 201, description: 'Processo de sincronização do CNES iniciado em background.' })
+  @ApiResponse({ status: 200, description: 'A base do CNES já está atualizada.' })
+  async triggerCnesSync(@Body() body: TriggerSyncDto) {
+    if (!body?.force) {
+      const config = this.syncService.getConfig();
+      const latest = await this.syncService.getLatestCnesVersion();
+      if (latest && latest.competence === config.cnes_competence) {
+        return { message: 'A base do CNES já está atualizada.' };
+      }
+    }
+    this.syncService.runSingleSync('cnes', body?.force).catch(e => console.error(e));
+    return { message: 'Sincronização do CNES iniciada em background.' };
+  }
+
+  @Post('sia/trigger')
+  @ApiOperation({ summary: 'Disparar sincronização apenas do SIA' })
+  @ApiResponse({ status: 201, description: 'Processo de sincronização do SIA iniciado em background.' })
+  @ApiResponse({ status: 200, description: 'A base do SIA já está atualizada.' })
+  async triggerSiaSync(@Body() body: TriggerSyncDto) {
+    if (!body?.force) {
+      const config = this.syncService.getConfig();
+      const latest = await this.syncService.getLatestSiaVersion();
+      if (latest && latest.competence === config.sia_competence) {
+        return { message: 'A base do SIA já está atualizada.' };
+      }
+    }
+    this.syncService.runSingleSync('sia', body?.force).catch(e => console.error(e));
+    return { message: 'Sincronização do SIA iniciada em background.' };
+  }
+
+  @Post('sigtap/trigger')
+  @ApiOperation({ summary: 'Disparar sincronização apenas do SIGTAP' })
+  @ApiResponse({ status: 201, description: 'Processo de sincronização do SIGTAP iniciado em background.' })
+  @ApiResponse({ status: 200, description: 'A base do SIGTAP já está atualizada.' })
+  async triggerSigtapSync(@Body() body: TriggerSyncDto) {
+    if (!body?.force) {
+      const config = this.syncService.getConfig();
+      const latest = await this.syncService.getLatestSigtapVersion();
+      if (latest && latest.competence === config.sigtap_competence) {
+        return { message: 'A base do SIGTAP já está atualizada.' };
+      }
+    }
+    this.syncService.runSingleSync('sigtap', body?.force).catch(e => console.error(e));
+    return { message: 'Sincronização do SIGTAP iniciada em background.' };
   }
 
   @Get('config')

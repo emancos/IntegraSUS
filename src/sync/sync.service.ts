@@ -135,6 +135,23 @@ export class SyncService implements OnModuleInit {
     }
   }
 
+  async runSingleSync(type: 'cnes' | 'sia' | 'sigtap', force: boolean = false) {
+    if (this.isSyncing) {
+      this.logger.warn('Sync is already running.');
+      return;
+    }
+    this.isSyncing = true;
+    try {
+      if (type === 'cnes') await this.syncCnes(force);
+      else if (type === 'sia') await this.syncSia(force);
+      else if (type === 'sigtap') await this.syncSigtap(force);
+    } catch (e) {
+      this.logger.error(`Error during ${type.toUpperCase()} Sync: ` + (e as Error).message);
+    } finally {
+      this.isSyncing = false;
+    }
+  }
+
   private async syncSigtap(force: boolean = false) {
     this.logger.log('Starting SIGTAP Sync...');
     try {

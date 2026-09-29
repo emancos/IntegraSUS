@@ -21,6 +21,10 @@ export class SiaImporterService {
     `);
     
     await this.dataSource.query('TRUNCATE TABLE tb_sia_cids');
+    
+    this.logger.log('Creating index tree for SIA CIDs...');
+    await this.dataSource.query('CREATE EXTENSION IF NOT EXISTS pg_trgm');
+    await this.dataSource.query('CREATE INDEX IF NOT EXISTS idx_sia_cids_desc_trgm ON tb_sia_cids USING GIN (descricao gin_trgm_ops)');
   }
 
   async importCids(dbfPath: string) {
