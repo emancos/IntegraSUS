@@ -119,14 +119,14 @@ export class CnesImporterService {
       
       stream.on('data', (row) => {
           batch.push(row);
-          if (batch.length >= 2000) {
+          if (batch.length >= 1000) {
             stream.pause();
             const currentBatch = [...batch];
             batch = [];
             processed += currentBatch.length;
             insertPromise = insertPromise.then(async () => {
               await this.insertEstabelecimentosBatch(queryRunner, currentBatch);
-              if (processed % 20000 === 0) this.logger.log(`Imported ${processed} estabelecimentos...`);
+              if (processed % 10000 === 0) this.logger.log(`Imported ${processed} estabelecimentos...`);
               stream.resume();
             }).catch(reject);
           }
