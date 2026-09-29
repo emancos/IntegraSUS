@@ -13,57 +13,57 @@ export class CnesImporterService {
     this.logger.log('Creating CNES staging tables...');
     await this.dataSource.query(`
       CREATE TABLE IF NOT EXISTS tb_cnes_estabelecimentos_raw (
-        co_unidade VARCHAR(30) PRIMARY KEY,
-        co_cnes VARCHAR(30),
-        nu_cnpj_mantenedora VARCHAR(50),
-        tp_pfpj VARCHAR(50),
-        nivel_dep VARCHAR(50),
-        no_razao_social VARCHAR(255),
-        no_fantasia VARCHAR(255),
-        no_logradouro VARCHAR(255),
-        nu_endereco VARCHAR(50),
-        no_complemento VARCHAR(100),
-        no_bairro VARCHAR(100),
-        co_cep VARCHAR(20),
-        co_regiao_saude VARCHAR(50),
-        co_micro_regiao VARCHAR(50),
-        co_distrito_sanitario VARCHAR(50),
-        co_distrito_administrativo VARCHAR(50),
-        nu_telefone VARCHAR(50),
-        nu_fax VARCHAR(50),
-        no_email VARCHAR(100),
-        nu_cpf VARCHAR(50),
-        nu_cnpj VARCHAR(50),
-        co_atividade VARCHAR(50),
-        co_clientela VARCHAR(50),
-        nu_alvara VARCHAR(50),
-        dt_expedicao VARCHAR(50),
-        tp_orgao_expedidor VARCHAR(50),
-        dt_val_lic_sani VARCHAR(50),
-        tp_lic_sani VARCHAR(50),
-        tp_unidade VARCHAR(50),
-        co_turno_atendimento VARCHAR(50),
-        co_estado_gestor VARCHAR(50),
-        co_municipio_gestor VARCHAR(50),
-        co_natureza_jur VARCHAR(50),
-        tp_gestao VARCHAR(50)
+        co_unidade TEXT PRIMARY KEY,
+        co_cnes TEXT,
+        nu_cnpj_mantenedora TEXT,
+        tp_pfpj TEXT,
+        nivel_dep TEXT,
+        no_razao_social TEXT,
+        no_fantasia TEXT,
+        no_logradouro TEXT,
+        nu_endereco TEXT,
+        no_complemento TEXT,
+        no_bairro TEXT,
+        co_cep TEXT,
+        co_regiao_saude TEXT,
+        co_micro_regiao TEXT,
+        co_distrito_sanitario TEXT,
+        co_distrito_administrativo TEXT,
+        nu_telefone TEXT,
+        nu_fax TEXT,
+        no_email TEXT,
+        nu_cpf TEXT,
+        nu_cnpj TEXT,
+        co_atividade TEXT,
+        co_clientela TEXT,
+        nu_alvara TEXT,
+        dt_expedicao TEXT,
+        tp_orgao_expedidor TEXT,
+        dt_val_lic_sani TEXT,
+        tp_lic_sani TEXT,
+        tp_unidade TEXT,
+        co_turno_atendimento TEXT,
+        co_estado_gestor TEXT,
+        co_municipio_gestor TEXT,
+        co_natureza_jur TEXT,
+        tp_gestao TEXT
       )
     `);
 
     await this.dataSource.query(`
       CREATE TABLE IF NOT EXISTS tb_cnes_carga_horaria_raw (
-        co_unidade VARCHAR(30),
-        co_profissional_sus VARCHAR(50)
+        co_unidade TEXT,
+        co_profissional_sus TEXT
       )
     `);
 
     await this.dataSource.query(`
       CREATE TABLE IF NOT EXISTS tb_cnes_profissionais_raw (
-        co_profissional_sus VARCHAR(50),
-        cpf VARCHAR(20),
-        cns VARCHAR(50),
-        nome VARCHAR(255),
-        cbo VARCHAR(50)
+        co_profissional_sus TEXT,
+        cpf TEXT,
+        cns TEXT,
+        nome TEXT,
+        cbo TEXT
       )
     `);
 
@@ -160,12 +160,12 @@ export class CnesImporterService {
         (r.NU_CNPJ_MANTENEDORA || '').trim(),
         (r.TP_PFPJ || '').trim(),
         (r.NIVEL_DEP || '').trim(),
-        (r.NO_RAZAO_SOCIAL || '').substring(0, 255),
-        (r.NO_FANTASIA || '').substring(0, 255),
-        (r.NO_LOGRADOURO || '').substring(0, 255),
-        (r.NU_ENDERECO || '').substring(0, 50),
-        (r.NO_COMPLEMENTO || '').substring(0, 100),
-        (r.NO_BAIRRO || '').substring(0, 100),
+        (r.NO_RAZAO_SOCIAL || '').trim(),
+        (r.NO_FANTASIA || '').trim(),
+        (r.NO_LOGRADOURO || '').trim(),
+        (r.NU_ENDERECO || '').trim(),
+        (r.NO_COMPLEMENTO || '').trim(),
+        (r.NO_BAIRRO || '').trim(),
         (r.CO_CEP || '').trim(),
         (r.CO_REGIAO_SAUDE || '').trim(),
         (r.CO_MICRO_REGIAO || '').trim(),
@@ -173,7 +173,7 @@ export class CnesImporterService {
         (r.CO_DISTRITO_ADMINISTRATIVO || '').trim(),
         (r.NU_TELEFONE || '').trim(),
         (r.NU_FAX || '').trim(),
-        (r.NO_EMAIL || '').substring(0, 100),
+        (r.NO_EMAIL || '').trim(),
         (r.NU_CPF || '').trim(),
         (r.NU_CNPJ || '').trim(),
         (r.CO_ATIVIDADE || '').trim(),
