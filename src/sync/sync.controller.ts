@@ -4,6 +4,9 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard.js';
 import { ApiTags, ApiBearerAuth, ApiOperation, ApiProperty, ApiResponse } from '@nestjs/swagger';
 
 export class SyncConfigDto {
+  @ApiProperty({ description: 'Competência atual baixada do SIGTAP', example: '202609', required: false })
+  sigtap_competence?: string;
+
   @ApiProperty({ description: 'Competência atual baixada do CNES', example: '202608', required: false })
   cnes_competence?: string;
 
@@ -17,6 +20,11 @@ export class SyncConfigDto {
   auto_sync_enabled?: boolean;
 }
 
+export class TriggerSyncDto {
+  @ApiProperty({ description: 'Forçar sincronização ignorando versão atual (baixa de novo)', example: true, required: false })
+  force?: boolean;
+}
+
 @ApiTags('sync')
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard)
@@ -27,9 +35,17 @@ export class SyncController {
   @Post('trigger')
   @ApiOperation({ summary: 'Disparar sincronização completa do dos dados em saúde' })
   @ApiResponse({ status: 201, description: 'Processo de sincronização iniciado em background.' })
-  triggerSync() {
-    this.syncService.runSync();
-    return { message: 'Sync process started in the background.' };
+  @ApiResponse({ status: 200, description: 'A base de dados já está totalmente atualizada.' })
+  async triggerSync(@Body() body: TriggerSyncDto) {
+    if (!body?.force) {
+      const isUpToDate = await this.syncService.checkIfUpToDate();
+      if (isUpToDate) {
+        return { message: 'A base de dados já está totalmente atualizada.' };
+      }
+    }
+    
+    this.syncService.runSync(body?.force);
+    return { message: 'Sincronização iniciada em background.' };
   }
 
   @Get('config')
