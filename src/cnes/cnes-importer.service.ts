@@ -11,6 +11,14 @@ export class CnesImporterService {
 
   async createTables() {
     this.logger.log('Creating CNES staging tables...');
+    
+    // Drop existing tables to ensure schema updates (like VARCHAR to TEXT) are applied
+    await this.dataSource.query('DROP TABLE IF EXISTS tb_cnes_estabelecimentos_raw');
+    await this.dataSource.query('DROP TABLE IF EXISTS tb_cnes_carga_horaria_raw');
+    await this.dataSource.query('DROP TABLE IF EXISTS tb_cnes_profissionais_raw');
+    await this.dataSource.query('DROP TABLE IF EXISTS tb_cnes_profissionais_json');
+    await this.dataSource.query('DROP TABLE IF EXISTS tb_cnes_estabelecimentos_json');
+
     await this.dataSource.query(`
       CREATE TABLE IF NOT EXISTS tb_cnes_estabelecimentos_raw (
         co_unidade TEXT PRIMARY KEY,
@@ -69,8 +77,8 @@ export class CnesImporterService {
 
     await this.dataSource.query(`
       CREATE TABLE IF NOT EXISTS tb_cnes_profissionais_json (
-        cpf VARCHAR(20),
-        cns VARCHAR(50),
+        cpf TEXT,
+        cns TEXT,
         nome_busca TEXT,
         documento JSONB
       )
@@ -78,7 +86,7 @@ export class CnesImporterService {
 
     await this.dataSource.query(`
       CREATE TABLE IF NOT EXISTS tb_cnes_estabelecimentos_json (
-        co_cnes VARCHAR(30),
+        co_cnes TEXT,
         nome_busca TEXT,
         documento JSONB
       )
