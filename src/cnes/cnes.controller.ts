@@ -25,17 +25,21 @@ export class CnesController {
   }
 
   @Get('profissionais')
-  @ApiOperation({ summary: 'Buscar profissionais por nome' })
-  @ApiQuery({ name: 'nome', description: 'Nome ou parte do nome' })
+  @ApiOperation({ summary: 'Buscar profissionais por nome, município ou CNES' })
+  @ApiQuery({ name: 'nome', required: false, description: 'Nome ou parte do nome' })
+  @ApiQuery({ name: 'municipio', required: false, description: 'Código IBGE do município' })
+  @ApiQuery({ name: 'cnes', required: false, description: 'Código CNES do estabelecimento' })
   @ApiQuery({ name: 'page', required: false, description: 'Número da página (padrão: 1)' })
   @ApiQuery({ name: 'limit', required: false, description: 'Itens por página (padrão: 10)' })
   async searchProfissionais(
     @Query('nome') nome: string,
+    @Query('municipio') municipio: string,
+    @Query('cnes') cnes: string,
     @Query('page') page = '1',
     @Query('limit') limit = '10'
   ) {
     const p = parseInt(page, 10) || 1;
     const l = parseInt(limit, 10) || 10;
-    return this.cnesService.searchProfissionaisByName(nome, p, l);
+    return this.cnesService.searchProfissionaisByName(nome, municipio, cnes, p, l);
   }
 }
