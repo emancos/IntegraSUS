@@ -91,28 +91,10 @@ export class SyncService implements OnModuleInit {
   }
 
   public async getLatestSiaVersion(): Promise<{ filename: string, competence: string, remotePath: string } | null> {
-    const client = new Client();
-    let latestYear = '';
     try {
-      await client.access({ host: "ftp.datasus.gov.br" });
-      const yearDirs = await client.list('siasus/bdsia');
-      for (const d of yearDirs) {
-        if (d.type === 2 && /^\d{4}$/.test(d.name)) {
-          if (d.name > latestYear) latestYear = d.name;
-        }
-      }
-    } catch (err) {
-      this.logger.error('Error fetching SIA year directories: ' + (err as Error).message);
-      return null;
-    } finally {
-      try { client.close(); } catch(e) {}
-    }
-    if (!latestYear) return null;
-    
-    try {
-      const latestSia = await getLatestFtpFile("ftp.datasus.gov.br", `siasus/bdsia/${latestYear}`, /^BDSIA(\d{6}[a-z]?)\.exe$/i);
+      const latestSia = await getLatestFtpFile("ftp.datasus.gov.br", "siasus/SIA", /^BDSIA(\d{6}[a-z]?)\.exe$/i);
       if (!latestSia) return null;
-      return { ...latestSia, remotePath: `siasus/bdsia/${latestYear}/${latestSia.filename}` };
+      return { ...latestSia, remotePath: `siasus/SIA/${latestSia.filename}` };
     } catch (e) {
       this.logger.error('Error fetching latest SIA file: ' + (e as Error).message);
       return null;
