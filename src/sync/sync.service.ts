@@ -240,7 +240,7 @@ export class SyncService implements OnModuleInit {
       await client.access({ host: "ftp.datasus.gov.br" });
       const yearDirs = await client.list('siasus/bdsia');
       for (const d of yearDirs) {
-        if (d.type === 2 && /^\\d{4}$/.test(d.name)) { // 2 = Directory
+        if (d.type === 2 && /^\d{4}$/.test(d.name)) { // 2 = Directory
           if (d.name > latestYear) latestYear = d.name;
         }
       }
@@ -255,14 +255,14 @@ export class SyncService implements OnModuleInit {
       return;
     }
 
-    const latestSia = await getLatestFtpFile("ftp.datasus.gov.br", \`siasus/bdsia/\${latestYear}\`, /^BDSIA(\\d{6}[a-z]?)\\.exe$/i);
+    const latestSia = await getLatestFtpFile("ftp.datasus.gov.br", `siasus/bdsia/${latestYear}`, /^BDSIA(\d{6}[a-z]?)\.exe$/i);
     if (!latestSia) {
       this.logger.error('Could not find any SIA exe file on FTP inside folder ' + latestYear);
       return;
     }
 
     // We must update the remotePath for downloader as it now includes the year folder
-    const remoteSiaPath = \`siasus/bdsia/\${latestYear}/\${latestSia.filename}\`;
+    const remoteSiaPath = `siasus/bdsia/${latestYear}/${latestSia.filename}`;
 
     const config = this.getConfig();
     if (config.sia_competence === latestSia.competence) {
