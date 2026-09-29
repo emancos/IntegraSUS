@@ -255,6 +255,16 @@ export class SyncService implements OnModuleInit {
         this.logger.warn('Estabelecimento CSV not found in the extracted CNES zip.');
       }
 
+      let tbCarga = null;
+      const altCarga = files.find(f => f.toLowerCase().startsWith('tbcargahorariasus'));
+      if (altCarga) {
+        tbCarga = path.join(cnesExtractedPath, altCarga);
+        this.logger.log(`Found Carga Horaria file: ${altCarga}`);
+        await this.cnesImporter.importCargaHoraria(tbCarga);
+      } else {
+        this.logger.warn('Carga Horaria CSV not found.');
+      }
+
       let tbProf = null;
       const altFile = files.find(f => f.toLowerCase().startsWith('tbdadosprofissionalsus'));
       if (altFile) {
@@ -267,6 +277,9 @@ export class SyncService implements OnModuleInit {
       } else {
         this.logger.warn('Profissionais CSV not found in the extracted CNES zip.');
       }
+
+      // 4. Build JSON collections via SQL
+      await this.cnesImporter.aggregateJsonDocuments();
 
       this.logger.log('Limpando diretório temporário CNES...');
       await new Promise(resolve => setTimeout(resolve, 1000));
