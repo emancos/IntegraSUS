@@ -232,11 +232,37 @@ export class SyncService implements OnModuleInit {
     
     // Dynamic fetching of latest SIA file
     this.logger.log('Checking for latest SIA version on DATASUS FTP...');
-    const latestSia = await getLatestFtpFile("ftp.datasus.gov.br", "siasus/bdsia", /^BDSIA(\d{6}[a-z]?)\.exe$/i);
-    if (!latestSia) {
-      this.logger.error('Could not find any SIA exe file on FTP.');
+    
+    // Primeiro encontra a pasta de ano mais recente (ex: 2024, 2025, 2026)
+    const client = new Client();
+    let latestYear = '';
+    try {
+      await client.access({ host: "ftp.datasus.gov.br" });
+      const yearDirs = await client.list('siasus/bdsia');
+      for (const d of yearDirs) {
+        if (d.type === 2 && /^\\d{4}$/.test(d.name)) { // 2 = Directory
+          if (d.name > latestYear) latestYear = d.name;
+        }
+      }
+    } catch (err) {
+      this.logger.error('Error fetching SIA year directories: ' + (err as Error).message);
+    } finally {
+      try { client.close(); } catch(e) {}
+    }
+
+    if (!latestYear) {
+      this.logger.error('Could not find any SIA year folder on FTP.');
       return;
     }
+
+    const latestSia = await getLatestFtpFile("ftp.datasus.gov.br", \`siasus/bdsia/\${latestYear}\`, /^BDSIA(\\d{6}[a-z]?)\\.exe$/i);
+    if (!latestSia) {
+      this.logger.error('Could not find any SIA exe file on FTP inside folder ' + latestYear);
+      return;
+    }
+
+    // We must update the remotePath for downloader as it now includes the year folder
+    const remoteSiaPath = \`siasus/bdsia/\${latestYear}/\${latestSia.filename}\`;
 
     const config = this.getConfig();
     if (config.sia_competence === latestSia.competence) {
@@ -252,7 +278,7 @@ export class SyncService implements OnModuleInit {
     if (!fs.existsSync(siaZipPath)) {
       this.logger.log(`Downloading SIA EXE (${latestSia.filename}) via FTP...`);
       try {
-        await downloadFtpMultithreaded("ftp.datasus.gov.br", `siasus/bdsia/${latestSia.filename}`, siaZipPath, 4);
+        await downloadFtpMultithreaded("ftp.datasus.gov.br", remoteSiaPath, siaZipPath, 4);
         this.logger.log('Download SIA EXE finished.');
       } catch (e) {
         this.logger.error('Failed to download SIA EXE: ' + (e as Error).message);
