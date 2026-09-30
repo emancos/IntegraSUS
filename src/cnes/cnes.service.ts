@@ -72,7 +72,18 @@ export class CnesService {
     const total = parseInt(countRows[0].total, 10);
 
     return {
-      data: rows.map((r: any) => r.documento),
+      data: rows.map((r: any) => {
+        const doc = r.documento;
+        if (doc.unidades && Array.isArray(doc.unidades)) {
+          if (cnes) {
+            doc.unidades = doc.unidades.filter((u: any) => u.codigo === cnes.trim());
+          }
+          if (municipio) {
+            doc.unidades = doc.unidades.filter((u: any) => u.municipio && u.municipio.codigo === municipio.trim());
+          }
+        }
+        return doc;
+      }),
       page,
       limit,
       total,
