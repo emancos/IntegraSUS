@@ -311,7 +311,8 @@ export class CnesImporterService {
     const params = [];
     let i = 1;
     for (const r of rows) {
-      const cns = (r.CO_PROFISSIONAL_SUS || r.CO_CNS || '').trim();
+      const co_profissional_sus = (r.CO_PROFISSIONAL_SUS || '').trim();
+      const cns = (r.CO_CNS || '').trim();
       const cpf = (r.CO_CPF || r.NU_CPF || '').trim();
       const nome = (r.NO_PROFISSIONAL || '').trim();
       const cbo = (r.CO_CBO || '').trim();
@@ -319,7 +320,7 @@ export class CnesImporterService {
       if (!nome) continue; 
       
       values.push(`($${i}, $${i+1}, $${i+2}, $${i+3}, $${i+4})`);
-      params.push(cns, cpf, cns, nome, cbo);
+      params.push(co_profissional_sus, cpf, cns, nome, cbo);
       i += 5;
     }
 
@@ -401,13 +402,13 @@ export class CnesImporterService {
              )), '[]'::jsonb)
              FROM tb_cnes_carga_horaria_raw ch
              JOIN tb_cnes_estabelecimentos_raw e ON ch.co_unidade = e.co_unidade
-             WHERE ch.co_profissional_sus = p.cns
+             WHERE ch.co_profissional_sus = p.co_profissional_sus
           )
         )
       FROM (
-        SELECT cpf, cns, MAX(nome) as nome, MAX(cbo) as cbo 
+        SELECT co_profissional_sus, MAX(cpf) as cpf, MAX(cns) as cns, MAX(nome) as nome, MAX(cbo) as cbo 
         FROM tb_cnes_profissionais_raw 
-        GROUP BY cpf, cns
+        GROUP BY co_profissional_sus
       ) p
     `);
 
