@@ -31,7 +31,7 @@ export class CnesService {
     return rows[0].documento;
   }
 
-  async searchProfissionaisByName(nome: string, municipio: string, cnes: string, page: number, limit: number) {
+  async searchProfissionaisByName(nome: string, municipio: string, cnes: string, profissao: string, page: number, limit: number) {
     const offset = (page - 1) * limit;
     let query = `
       SELECT p.documento 
@@ -64,6 +64,14 @@ export class CnesService {
       countQuery += ` AND p.documento->'unidades' @> $${countParams.length}::jsonb `;
     }
 
+    if (profissao) {
+      params.push(`%${profissao.toUpperCase().trim()}%`);
+      countParams.push(`%${profissao.toUpperCase().trim()}%`);
+      const clause = `EXISTS (SELECT 1 FROM jsonb_array_elements(p.documento->'cbos') as c WHERE UPPER(c->>'nome') LIKE $${params.length})`;
+      query += ` AND ${clause} `;
+      countQuery += ` AND ${clause} `;
+    }
+
     query += ` ORDER BY p.nome_busca ASC LIMIT $${params.length + 1} OFFSET $${params.length + 2}`;
     params.push(limit, offset);
 
@@ -80,6 +88,10 @@ export class CnesService {
           }
           if (municipio) {
             doc.unidades = doc.unidades.filter((u: any) => u.municipio && u.municipio.codigo === municipio.trim());
+          }
+          if (profissao) {
+            const profUpper = profissao.toUpperCase().trim();
+            doc.unidades = doc.unidades.filter((u: any) => u.cbo && u.cbo.nome && u.cbo.nome.toUpperCase().includes(profUpper));
           }
         }
         return doc;
