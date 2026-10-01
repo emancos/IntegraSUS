@@ -255,6 +255,16 @@ export class SyncService implements OnModuleInit {
         this.logger.warn('Estabelecimento CSV not found in the extracted CNES zip.');
       }
 
+      let tbCbo = null;
+      const altCbo = files.find(f => f.toLowerCase().startsWith('tbatividadeprofissional'));
+      if (altCbo) {
+        tbCbo = path.join(cnesExtractedPath, altCbo);
+        this.logger.log(`Found Atividade Profissional (CBO) file: ${altCbo}`);
+        await this.cnesImporter.importAtividadeProfissional(tbCbo);
+      } else {
+        this.logger.warn('Atividade Profissional (CBO) CSV not found.');
+      }
+
       let tbMuni = null;
       const altMuni = files.find(f => f.toLowerCase().startsWith('tbmunicipio'));
       if (altMuni) {

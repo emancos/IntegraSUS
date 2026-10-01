@@ -17,6 +17,7 @@ export class CnesImporterService {
     await this.dataSource.query('DROP TABLE IF EXISTS tb_cnes_carga_horaria_raw');
     await this.dataSource.query('DROP TABLE IF EXISTS tb_cnes_profissionais_raw');
     await this.dataSource.query('DROP TABLE IF EXISTS tb_cnes_municipios_raw');
+    await this.dataSource.query('DROP TABLE IF EXISTS tb_cnes_cbo_raw');
     await this.dataSource.query('DROP TABLE IF EXISTS tb_cnes_profissionais_json');
     await this.dataSource.query('DROP TABLE IF EXISTS tb_cnes_estabelecimentos_json');
 
@@ -24,6 +25,13 @@ export class CnesImporterService {
       CREATE TABLE IF NOT EXISTS tb_cnes_municipios_raw (
         co_municipio TEXT PRIMARY KEY,
         no_municipio TEXT
+      )
+    `);
+
+    await this.dataSource.query(`
+      CREATE TABLE IF NOT EXISTS tb_cnes_cbo_raw (
+        co_cbo TEXT PRIMARY KEY,
+        ds_atividade_profissional TEXT
       )
     `);
 
@@ -69,7 +77,8 @@ export class CnesImporterService {
     await this.dataSource.query(`
       CREATE TABLE IF NOT EXISTS tb_cnes_carga_horaria_raw (
         co_unidade TEXT,
-        co_profissional_sus TEXT
+        co_profissional_sus TEXT,
+        co_cbo TEXT
       )
     `);
 
@@ -105,6 +114,7 @@ export class CnesImporterService {
     await this.dataSource.query('TRUNCATE TABLE tb_cnes_carga_horaria_raw');
     await this.dataSource.query('TRUNCATE TABLE tb_cnes_profissionais_raw');
     await this.dataSource.query('TRUNCATE TABLE tb_cnes_municipios_raw');
+    await this.dataSource.query('TRUNCATE TABLE tb_cnes_cbo_raw');
     await this.dataSource.query('TRUNCATE TABLE tb_cnes_profissionais_json');
     await this.dataSource.query('TRUNCATE TABLE tb_cnes_estabelecimentos_json');
     
@@ -175,6 +185,62 @@ export class CnesImporterService {
     }
     if (values.length === 0) return;
     const query = `INSERT INTO tb_cnes_municipios_raw VALUES ${values.join(', ')} ON CONFLICT (co_municipio) DO NOTHING`;
+    await queryRunner.query(query, params);
+  }
+
+  async importAtividadeProfissional(csvPath: string) {
+    this.logger.log('Importing Atividade Profissional (CBO) from CNES...');
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    
+    let batch: any[] = [];
+    let processed = 0;
+    let insertPromise = Promise.resolve();
+
+    return new Promise<void>((resolve, reject) => {
+      const stream = fs.createReadStream(csvPath, { encoding: 'latin1' }).pipe(csv({ separator: ';' }));
+      
+      stream.on('data', (row) => {
+          batch.push(row);
+          if (batch.length >= 5000) {
+            stream.pause();
+            const currentBatch = [...batch];
+            batch = [];
+            processed += currentBatch.length;
+            insertPromise = insertPromise.then(async () => {
+              await this.insertAtividadeProfissionalBatch(queryRunner, currentBatch);
+              stream.resume();
+            }).catch(reject);
+          }
+        })
+        .on('end', () => {
+          insertPromise.then(async () => {
+            if (batch.length > 0) {
+              await this.insertAtividadeProfissionalBatch(queryRunner, batch);
+              processed += batch.length;
+            }
+            this.logger.log(`Finished importing ${processed} cbos.`);
+            await queryRunner.release();
+            resolve();
+          }).catch(reject);
+        })
+        .on('error', (err) => reject(err));
+    });
+  }
+
+  private async insertAtividadeProfissionalBatch(queryRunner: any, rows: any[]) {
+    const values = [];
+    const params = [];
+    let i = 1;
+    for (const r of rows) {
+      const co_cbo = (r.CO_CBO || '').trim();
+      if (!co_cbo) continue;
+      values.push(`($${i}, $${i+1})`);
+      params.push(co_cbo, (r.DS_ATIVIDADE_PROFISSIONAL || '').trim());
+      i += 2;
+    }
+    if (values.length === 0) return;
+    const query = `INSERT INTO tb_cnes_cbo_raw VALUES ${values.join(', ')} ON CONFLICT (co_cbo) DO NOTHING`;
     await queryRunner.query(query, params);
   }
 
@@ -320,10 +386,11 @@ export class CnesImporterService {
     for (const r of rows) {
       const co_unidade = (r.CO_UNIDADE || '').trim();
       const prof = (r.CO_PROFISSIONAL_SUS || '').trim();
+      const co_cbo = (r.CO_CBO || '').trim();
       if (!co_unidade || !prof) continue;
-      values.push(`($${i}, $${i+1})`);
-      params.push(co_unidade, prof);
-      i += 2;
+      values.push(`($${i}, $${i+1}, $${i+2})`);
+      params.push(co_unidade, prof, co_cbo);
+      i += 3;
     }
     if (values.length === 0) return;
     const query = `INSERT INTO tb_cnes_carga_horaria_raw VALUES ${values.join(', ')}`;
@@ -463,7 +530,15 @@ export class CnesImporterService {
             ELSE p.cpf
           END,
           'cns', p.cns,
-          'cbo', jsonb_build_object('codigo', p.cbo),
+          'cbos', (
+             SELECT COALESCE(jsonb_agg(DISTINCT jsonb_build_object(
+                 'codigo', ch.co_cbo,
+                 'nome', COALESCE(cbo.ds_atividade_profissional, '')
+             )), '[]'::jsonb)
+             FROM tb_cnes_carga_horaria_raw ch
+             LEFT JOIN tb_cnes_cbo_raw cbo ON ch.co_cbo = cbo.co_cbo
+             WHERE ch.co_profissional_sus = p.co_profissional_sus
+          ),
           'unidades', (
              SELECT COALESCE(jsonb_agg(jsonb_build_object(
                 'codigo', e.co_cnes,
@@ -472,16 +547,21 @@ export class CnesImporterService {
                     'codigo', e.co_municipio_gestor, 
                     'nome', m.no_municipio,
                     'uf', e.co_estado_gestor
+                ),
+                'cbo', jsonb_build_object(
+                    'codigo', ch.co_cbo,
+                    'nome', COALESCE(cbo.ds_atividade_profissional, '')
                 )
              )), '[]'::jsonb)
              FROM tb_cnes_carga_horaria_raw ch
              JOIN tb_cnes_estabelecimentos_raw e ON ch.co_unidade = e.co_unidade
              LEFT JOIN tb_cnes_municipios_raw m ON m.co_municipio = e.co_municipio_gestor
+             LEFT JOIN tb_cnes_cbo_raw cbo ON ch.co_cbo = cbo.co_cbo
              WHERE ch.co_profissional_sus = p.co_profissional_sus
           )
         )
       FROM (
-        SELECT co_profissional_sus, MAX(cpf) as cpf, MAX(cns) as cns, MAX(nome) as nome, MAX(cbo) as cbo 
+        SELECT co_profissional_sus, MAX(cpf) as cpf, MAX(cns) as cns, MAX(nome) as nome 
         FROM tb_cnes_profissionais_raw 
         GROUP BY co_profissional_sus
       ) p
