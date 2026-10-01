@@ -16,8 +16,16 @@ export class CnesImporterService {
     await this.dataSource.query('DROP TABLE IF EXISTS tb_cnes_estabelecimentos_raw');
     await this.dataSource.query('DROP TABLE IF EXISTS tb_cnes_carga_horaria_raw');
     await this.dataSource.query('DROP TABLE IF EXISTS tb_cnes_profissionais_raw');
+    await this.dataSource.query('DROP TABLE IF EXISTS tb_cnes_municipios_raw');
     await this.dataSource.query('DROP TABLE IF EXISTS tb_cnes_profissionais_json');
     await this.dataSource.query('DROP TABLE IF EXISTS tb_cnes_estabelecimentos_json');
+
+    await this.dataSource.query(`
+      CREATE TABLE IF NOT EXISTS tb_cnes_municipios_raw (
+        co_municipio TEXT PRIMARY KEY,
+        no_municipio TEXT
+      )
+    `);
 
     await this.dataSource.query(`
       CREATE TABLE IF NOT EXISTS tb_cnes_estabelecimentos_raw (
@@ -96,6 +104,7 @@ export class CnesImporterService {
     await this.dataSource.query('TRUNCATE TABLE tb_cnes_estabelecimentos_raw');
     await this.dataSource.query('TRUNCATE TABLE tb_cnes_carga_horaria_raw');
     await this.dataSource.query('TRUNCATE TABLE tb_cnes_profissionais_raw');
+    await this.dataSource.query('TRUNCATE TABLE tb_cnes_municipios_raw');
     await this.dataSource.query('TRUNCATE TABLE tb_cnes_profissionais_json');
     await this.dataSource.query('TRUNCATE TABLE tb_cnes_estabelecimentos_json');
     
@@ -111,6 +120,62 @@ export class CnesImporterService {
     
     // Create extension
     await this.dataSource.query('CREATE EXTENSION IF NOT EXISTS pg_trgm');
+  }
+
+  async importMunicipios(csvPath: string) {
+    this.logger.log('Importing Municipios from CNES...');
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    
+    let batch: any[] = [];
+    let processed = 0;
+    let insertPromise = Promise.resolve();
+
+    return new Promise<void>((resolve, reject) => {
+      const stream = fs.createReadStream(csvPath, { encoding: 'latin1' }).pipe(csv({ separator: ';' }));
+      
+      stream.on('data', (row) => {
+          batch.push(row);
+          if (batch.length >= 5000) {
+            stream.pause();
+            const currentBatch = [...batch];
+            batch = [];
+            processed += currentBatch.length;
+            insertPromise = insertPromise.then(async () => {
+              await this.insertMunicipiosBatch(queryRunner, currentBatch);
+              stream.resume();
+            }).catch(reject);
+          }
+        })
+        .on('end', () => {
+          insertPromise.then(async () => {
+            if (batch.length > 0) {
+              await this.insertMunicipiosBatch(queryRunner, batch);
+              processed += batch.length;
+            }
+            this.logger.log(`Finished importing ${processed} municipios.`);
+            await queryRunner.release();
+            resolve();
+          }).catch(reject);
+        })
+        .on('error', (err) => reject(err));
+    });
+  }
+
+  private async insertMunicipiosBatch(queryRunner: any, rows: any[]) {
+    const values = [];
+    const params = [];
+    let i = 1;
+    for (const r of rows) {
+      const co_municipio = (r.CO_MUNICIPIO || '').trim();
+      if (!co_municipio) continue;
+      values.push(`($${i}, $${i+1})`);
+      params.push(co_municipio, (r.NO_MUNICIPIO || '').trim());
+      i += 2;
+    }
+    if (values.length === 0) return;
+    const query = `INSERT INTO tb_cnes_municipios_raw VALUES ${values.join(', ')} ON CONFLICT (co_municipio) DO NOTHING`;
+    await queryRunner.query(query, params);
   }
 
   async importEstabelecimentos(csvPath: string) {
@@ -356,7 +421,13 @@ export class CnesImporterService {
           'stCotaTabela', false,
           'stSolicitaFora', false,
           'stSolicitante', false,
-          'tpGestao', e.tp_gestao,
+          'tpGestao', CASE e.tp_gestao
+            WHEN 'M' THEN 'Municipal'
+            WHEN 'E' THEN 'Estadual'
+            WHEN 'D' THEN 'Dupla'
+            WHEN 'S' THEN 'Sem Gestão'
+            ELSE e.tp_gestao
+          END,
           'stExecutante', false,
           'sgUf', (CASE e.co_estado_gestor
             WHEN '11' THEN 'RO' WHEN '12' THEN 'AC' WHEN '13' THEN 'AM' WHEN '14' THEN 'RR'
@@ -368,9 +439,11 @@ export class CnesImporterService {
             WHEN '51' THEN 'MT' WHEN '52' THEN 'GO' WHEN '53' THEN 'DF' ELSE '' END),
           'nuCnpj', NULLIF(e.nu_cnpj, ''),
           'coNaturezaOrganizacao', null,
-          'coNaturezaJuridica', e.co_natureza_jur
+          'coNaturezaJuridica', e.co_natureza_jur,
+          'noMunicipio', m.no_municipio
         )
       FROM tb_cnes_estabelecimentos_raw e
+      LEFT JOIN tb_cnes_municipios_raw m ON m.co_municipio = e.co_municipio_gestor
       WHERE e.co_cnes IS NOT NULL AND e.co_cnes != ''
     `);
 
@@ -397,11 +470,13 @@ export class CnesImporterService {
                 'nome', COALESCE(e.no_fantasia, e.no_razao_social, 'Desconhecido'),
                 'municipio', jsonb_build_object(
                     'codigo', e.co_municipio_gestor, 
+                    'nome', m.no_municipio,
                     'uf', e.co_estado_gestor
                 )
              )), '[]'::jsonb)
              FROM tb_cnes_carga_horaria_raw ch
              JOIN tb_cnes_estabelecimentos_raw e ON ch.co_unidade = e.co_unidade
+             LEFT JOIN tb_cnes_municipios_raw m ON m.co_municipio = e.co_municipio_gestor
              WHERE ch.co_profissional_sus = p.co_profissional_sus
           )
         )
