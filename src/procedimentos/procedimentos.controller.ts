@@ -86,6 +86,63 @@ export class ProcedimentosController {
     return { data: formattedData, meta: { total: parseInt(countRes[0].count, 10), page: p, limit: l } };
   }
 
+  @Get('cbo/:cbo')
+  @ApiOperation({ summary: 'Listar procedimentos permitidos por CBO' })
+  @ApiParam({ name: 'cbo', description: 'Código CBO (ex: 225125)' })
+  @ApiQuery({ name: 'tipo', required: false, description: 'Filtrar por tipo: consulta, exame ou cirurgia' })
+  @ApiQuery({ name: 'page', required: false, description: 'Número da página (padrão: 1)' })
+  @ApiQuery({ name: 'limit', required: false, description: 'Itens por página (padrão: 10)' })
+  async getProcedimentosPorCbo(
+    @Param('cbo') cbo: string, 
+    @Query('tipo') tipo?: string, 
+    @Query('page') page = '1', 
+    @Query('limit') limit = '10'
+  ) {
+    const p = parseInt(page, 10) || 1;
+    const l = parseInt(limit, 10) || 10;
+    const offset = (p - 1) * l;
+    
+    let baseWhere = `r."CO_OCUPACAO" = $1`;
+    let queryParams: any[] = [cbo];
+    
+    if (tipo) {
+      const tipoLower = tipo.toLowerCase().trim();
+      if (tipoLower === 'consulta') {
+        baseWhere += ` AND j.codigo LIKE '0301%'`;
+      } else if (tipoLower === 'exame') {
+        baseWhere += ` AND j.codigo LIKE '02%'`;
+      } else if (tipoLower === 'cirurgia') {
+        baseWhere += ` AND j.codigo LIKE '04%'`;
+      }
+    }
+    
+    const query = `
+      SELECT j.documento 
+      FROM tb_procedimento_json j
+      INNER JOIN rl_procedimento_ocupacao r ON j.codigo = r."CO_PROCEDIMENTO"
+      WHERE ${baseWhere}
+      LIMIT $2 OFFSET $3
+    `;
+    queryParams.push(l, offset);
+    
+    const rows = await this.dataSource.query(query, queryParams);
+    
+    const countQuery = `
+      SELECT COUNT(*) 
+      FROM tb_procedimento_json j
+      INNER JOIN rl_procedimento_ocupacao r ON j.codigo = r."CO_PROCEDIMENTO"
+      WHERE ${baseWhere}
+    `;
+    const countRes = await this.dataSource.query(countQuery, [cbo]);
+    
+    const formattedData = rows.map((r: any) => {
+        const doc = r.documento;
+        if (doc && doc.valores) delete doc.valores;
+        return doc;
+    });
+    return { data: formattedData, meta: { total: parseInt(countRes[0].count, 10), page: p, limit: l } };
+  }
+
   @Get(':codigo')
   @ApiOperation({ summary: 'Obter detalhamento completo de um procedimento' })
   @ApiParam({ name: 'codigo', description: 'Código SIGTAP de 10 dígitos' })
