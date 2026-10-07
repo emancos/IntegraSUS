@@ -1,6 +1,6 @@
 # IntegraSUS API (SIGTAP, CNES, SIA) 🚀
 
-Uma API robusta e inteligente construída com **NestJS** e **PostgreSQL**, voltada para a extração, transformação e carregamento (ETL) automatizado de bases massivas de dados em saúde pública fornecidas pelo Governo Federal brasileiro através do **DATASUS**.
+API construída com **NestJS** e **PostgreSQL**, voltada para a extração, transformação e carregamento (ETL) automatizado de bases massivas de dados em saúde pública fornecidas pelo Governo Federal brasileiro através do **DATASUS**.
 
 ## 📌 Funcionalidades
 
