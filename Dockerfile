@@ -26,6 +26,9 @@ RUN npm ci --omit=dev
 # Copiar o build da etapa anterior
 COPY --from=builder /app/dist ./dist
 
+# Copiar scripts avulsos (.cjs)
+COPY --from=builder /app/*.cjs ./
+
 # Garantir permissões para a aplicação baixar e extrair arquivos (CNES/SIA)
 RUN chown -R node:node /app
 USER node
