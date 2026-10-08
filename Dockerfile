@@ -31,6 +31,7 @@ COPY --from=builder /app/*.cjs ./
 
 # Garantir permissões para a aplicação baixar e extrair arquivos (CNES/SIA)
 RUN chown -R node:node /app
+RUN chmod +x /app/node_modules/7zip-bin/linux/arm64/7za
 USER node
 
 # Definir as variáveis de ambiente padrões
