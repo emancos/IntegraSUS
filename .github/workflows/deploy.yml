@@ -23,13 +23,16 @@ jobs:
             mkdir -p /opt/integra-sus
             cd /opt/integra-sus
 
-            # Se não for um repositório git ainda, clona. Se for, puxa as alterações.
+            # Se não for um repositório git ainda, inicializa e puxa. Se for, puxa as alterações.
             if [ ! -d ".git" ]; then
-              # Substitua a URL abaixo pela URL real do repositório
-              # Utilizando um token ou Deploy Key no servidor
-              git clone https://github.com/${{ github.repository }}.git .
+              git init
+              git remote add origin https://github.com/${{ github.repository }}.git
+              git fetch --all
+              git reset --hard origin/main
+              git branch -M main
             else
-              git pull origin main
+              git fetch --all
+              git reset --hard origin/main
             fi
 
             # Copia variáveis de ambiente se não existirem
