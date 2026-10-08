@@ -14,7 +14,7 @@ services:
       - DATABASE_URL=${DATABASE_URL}
       - PORT=${PORT}
     networks:
-      - intergra_sus
+      - integra_sus
     volumes:
       # Monta o arquivo local para persistir as alterações de cron feitas via API
       - ./sync-config.json:/app/sync-config.json
@@ -33,7 +33,7 @@ services:
     ports:
       - "5433:5432"
     networks:
-      - intergra_sus
+      - integra_sus
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -46,6 +46,6 @@ volumes:
   pgdata:
 
 networks:
-  intergra_sus:
+  integra_sus:
     driver: bridge
 
