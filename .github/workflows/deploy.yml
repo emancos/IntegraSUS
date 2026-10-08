@@ -1,0 +1,47 @@
+name: Deploy API to VPS
+
+on:
+  push:
+    branches:
+      - main # O deploy será disparado ao fazer push na branch main
+
+jobs:
+  deploy:
+    name: Deploy to Ubuntu ARM64 VPS
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USERNAME }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: ${{ secrets.VPS_PORT || 22 }}
+          script: |
+            # Garante que o diretório do projeto existe
+            mkdir -p /opt/sigtap-api
+            cd /opt/sigtap-api
+
+            # Se não for um repositório git ainda, clona. Se for, puxa as alterações.
+            if [ ! -d ".git" ]; then
+              # Substitua a URL abaixo pela URL real do repositório
+              # Utilizando um token ou Deploy Key no servidor
+              git clone https://github.com/${{ github.repository }}.git .
+            else
+              git pull origin main
+            fi
+
+            # Copia variáveis de ambiente se não existirem
+            if [ ! -f ".env" ]; then
+              cp .env.example .env
+              # IMPORTANTE: Você precisará editar o .env manualmente na VPS na primeira vez!
+            fi
+
+            # Inicia/Reinicia os contêineres construindo as novas alterações
+            # O ambiente ARM64 construirá a imagem nativamente
+            docker compose down
+            docker compose up -d --build
+            
+            # Limpa imagens antigas sem uso
+            docker image prune -f

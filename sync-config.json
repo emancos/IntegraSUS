@@ -1,0 +1,7 @@
+{
+  "sigtap_competence": "TabelaUnificada_202609_v2609171117",
+  "cnes_competence": "202608",
+  "sia_competence": "202609a",
+  "cron_expression": "0 3 1,15 * *",
+  "auto_sync_enabled": true
+}

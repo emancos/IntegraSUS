@@ -1,11 +1,9 @@
-version: '3.8'
-
 services:
   api:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: sigtap_api
+    container_name: integra_sus_api
     restart: unless-stopped
     ports:
       - "${PORT}:${PORT}"
@@ -15,6 +13,8 @@ services:
       - NODE_ENV=production
       - DATABASE_URL=${DATABASE_URL}
       - PORT=${PORT}
+    networks:
+      - intergra_sus
     volumes:
       # Monta o arquivo local para persistir as alterações de cron feitas via API
       - ./sync-config.json:/app/sync-config.json
@@ -23,8 +23,8 @@ services:
         condition: service_healthy
 
   postgres:
-    image: postgres:15-alpine
-    container_name: sigtap_postgres
+    image: postgres:17
+    container_name: integra_sus_postgres
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
@@ -32,6 +32,8 @@ services:
       POSTGRES_DB: ${POSTGRES_DB}
     ports:
       - "5432:5432"
+    networks:
+      - intergra_sus
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -42,3 +44,8 @@ services:
 
 volumes:
   pgdata:
+
+networks:
+  intergra_sus:
+    driver: bridge
+
