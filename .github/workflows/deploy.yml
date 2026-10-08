@@ -41,6 +41,12 @@ jobs:
               # IMPORTANTE: Você precisará editar o .env manualmente na VPS na primeira vez!
             fi
 
+            # Garante que o arquivo de sync existe com permissão de escrita
+            if [ ! -f "sync-config.json" ]; then
+              echo '{"cron":"0 0 1 * *"}' > sync-config.json
+            fi
+            chmod 666 sync-config.json
+
             # Inicia/Reinicia os contêineres construindo as novas alterações
             # O ambiente ARM64 construirá a imagem nativamente
             docker compose down
