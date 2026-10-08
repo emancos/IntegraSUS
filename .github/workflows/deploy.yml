@@ -20,8 +20,8 @@ jobs:
           port: ${{ secrets.VPS_PORT || 22 }}
           script: |
             # Garante que o diretório do projeto existe
-            mkdir -p /opt/sigtap-api
-            cd /opt/sigtap-api
+            mkdir -p /opt/integra-sus
+            cd /opt/integra-sus
 
             # Se não for um repositório git ainda, clona. Se for, puxa as alterações.
             if [ ! -d ".git" ]; then
