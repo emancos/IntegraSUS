@@ -81,7 +81,7 @@ export class ProcedimentosController {
             FROM rl_procedimento_ocupacao r
             INNER JOIN tb_ocupacao o ON r."CO_OCUPACAO" = o."CO_OCUPACAO"
             INNER JOIN tb_procedimento_json j ON r."CO_PROCEDIMENTO" = j.codigo
-            WHERE (j.codigo LIKE '030101%' OR j.nome ILIKE '%CONSULTA%')
+            WHERE (j.codigo = '0301010072' OR (j.codigo = '0301010048' AND NOT o."NO_OCUPACAO" ILIKE 'medico%'))
               AND (${cboWhere})
           ),
           combined AS (
@@ -132,12 +132,12 @@ export class ProcedimentosController {
       totalCount = parseInt(countRes[0]?.count || '0', 10);
     }
     
-    // Formata os dados e injeta o nome específico quando associado a uma ocupação/especialidade
+    // Formata os dados e injeta o nome específico apenas quando for consulta especializada (0301010072 ou 0301010048)
     const formattedData = rows.map((r: any) => {
       const doc = JSON.parse(JSON.stringify(r.documento));
       if (doc && doc.valores) delete doc.valores;
 
-      if (r.cbo_codigo && r.cbo_nome) {
+      if (r.cbo_codigo && r.cbo_nome && (doc.codigo === '0301010072' || doc.codigo === '0301010048')) {
         const info = formatConsultaName(r.cbo_nome, doc.nome);
         doc.nome_original = doc.nome;
         doc.nome = info.nomeConsulta;
@@ -247,7 +247,8 @@ export class ProcedimentosController {
         const doc = JSON.parse(JSON.stringify(r.documento));
         if (doc && doc.valores) delete doc.valores;
 
-        if (doc.codigo && (doc.codigo.startsWith('030101') || doc.nome?.includes('CONSULTA')) && r.cbo_nome) {
+        // Formata especificamente a Consulta Médica em Atenção Especializada (0301010072) ou Exceto Médico (0301010048)
+        if (r.cbo_nome && (doc.codigo === '0301010072' || (doc.codigo === '0301010048' && !r.cbo_nome.toLowerCase().startsWith('medico')))) {
           const info = formatConsultaName(r.cbo_nome, doc.nome);
           doc.nome_original = doc.nome;
           doc.nome = info.nomeConsulta;

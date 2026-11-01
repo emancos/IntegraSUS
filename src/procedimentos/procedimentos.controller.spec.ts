@@ -93,7 +93,7 @@ describe('ProcedimentosController', () => {
     });
   });
 
-  it('should format consultation in getProcedimentosPorCbo', async () => {
+  it('should format consultation in getProcedimentosPorCbo for 0301010072', async () => {
     dataSourceMock.query.mockResolvedValueOnce([
       {
         cbo_nome: 'Médico angiologista',
@@ -110,5 +110,23 @@ describe('ProcedimentosController', () => {
     expect(res.data[0].nome).toBe('CONSULTA EM ANGIOLOGIA');
     expect(res.data[0].nome_especifico).toBe('CONSULTA EM ANGIOLOGIA');
     expect(res.data[0].cbo_especifico?.codigo).toBe('225115');
+  });
+
+  it('should preserve original name for non-specialized procedures in getProcedimentosPorCbo', async () => {
+    dataSourceMock.query.mockResolvedValueOnce([
+      {
+        cbo_nome: 'Médico angiologista',
+        documento: {
+          codigo: '0301010137',
+          nome: 'CONSULTA/ATENDIMENTO DOMICILIAR NA ATENCAO ESPECIALIZADA'
+        }
+      }
+    ]);
+    dataSourceMock.query.mockResolvedValueOnce([{ count: '1' }]);
+
+    const res = await instance.getProcedimentosPorCbo('225115', 'consulta', '1', '10');
+    expect(res.data[0].codigo).toBe('0301010137');
+    expect(res.data[0].nome).toBe('CONSULTA/ATENDIMENTO DOMICILIAR NA ATENCAO ESPECIALIZADA');
+    expect(res.data[0].nome_especifico).toBeUndefined();
   });
 });
