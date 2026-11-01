@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { SyncController, SyncConfigDto } from './sync.controller.js';
 import { SyncService } from './sync.service.js';
+import { vi, describe, beforeEach, it, expect } from 'vitest';
 
 describe('SyncController', () => {
   let controller: SyncController;
@@ -14,7 +15,8 @@ describe('SyncController', () => {
   };
 
   const mockSyncService = {
-    runSync: vi.fn(),
+    runSync: vi.fn().mockResolvedValue(undefined),
+    checkIfUpToDate: vi.fn().mockResolvedValue(false),
     getConfig: vi.fn().mockReturnValue(mockSyncConfig),
     updateConfig: vi.fn().mockImplementation((config) => ({ ...mockSyncConfig, ...config }))
   };
@@ -39,10 +41,10 @@ describe('SyncController', () => {
   });
 
   describe('triggerSync', () => {
-    it('should call runSync and return a success message', () => {
-      const result = controller.triggerSync();
-      expect(service.runSync).toHaveBeenCalled();
-      expect(result).toEqual({ message: 'Sync process started in the background.' });
+    it('should call runSync and return a success message', async () => {
+      const result = await controller.triggerSync({ force: true });
+      expect(service.runSync).toHaveBeenCalledWith(true);
+      expect(result).toEqual({ message: 'Sincronização completa iniciada em background.' });
     });
   });
 
