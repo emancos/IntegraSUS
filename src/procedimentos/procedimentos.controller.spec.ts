@@ -129,4 +129,101 @@ describe('ProcedimentosController', () => {
     expect(res.data[0].nome).toBe('CONSULTA/ATENDIMENTO DOMICILIAR NA ATENCAO ESPECIALIZADA');
     expect(res.data[0].nome_especifico).toBeUndefined();
   });
+
+  describe('getSubgrupos', () => {
+    it('should search subgrupos textually (e.g. tomografia)', async () => {
+      dataSourceMock.query.mockResolvedValueOnce([{ has_subgrupo: true }]);
+      dataSourceMock.query.mockResolvedValueOnce([
+        {
+          grupo_codigo: '02',
+          grupo_nome: 'PROCEDIMENTOS COM FINALIDADE DIAGNÓSTICA',
+          subgrupo_codigo: '06',
+          subgrupo_nome: 'DIAGNÓSTICO POR TOMOGRAFIA'
+        }
+      ]);
+
+      const res = await instance.getSubgrupos('tomografia');
+      expect(res).toEqual([
+        {
+          grupo_codigo: '02',
+          grupo_nome: 'PROCEDIMENTOS COM FINALIDADE DIAGNÓSTICA',
+          subgrupo_codigo: '06',
+          subgrupo_nome: 'DIAGNÓSTICO POR TOMOGRAFIA'
+        }
+      ]);
+    });
+  });
+
+  describe('getGrupos', () => {
+    it('should list flat groups when arvore is not specified', async () => {
+      dataSourceMock.query.mockResolvedValueOnce([{ has_grupo: true }]);
+      dataSourceMock.query.mockResolvedValueOnce([
+        { codigo: '01', nome: 'AÇÕES DE PROMOÇÃO E PREVENÇÃO EM SAÚDE' },
+        { codigo: '02', nome: 'PROCEDIMENTOS COM FINALIDADE DIAGNÓSTICA' }
+      ]);
+
+      const res = await instance.getGrupos();
+      expect(res).toEqual([
+        { codigo: '01', nome: 'AÇÕES DE PROMOÇÃO E PREVENÇÃO EM SAÚDE' },
+        { codigo: '02', nome: 'PROCEDIMENTOS COM FINALIDADE DIAGNÓSTICA' }
+      ]);
+    });
+
+    it('should return nested tree when arvore is true', async () => {
+      dataSourceMock.query.mockResolvedValueOnce([{ has_grupo: true }]);
+      // grupos
+      dataSourceMock.query.mockResolvedValueOnce([
+        { codigo: '02', nome: 'PROCEDIMENTOS COM FINALIDADE DIAGNÓSTICA' }
+      ]);
+      // subgrupos
+      dataSourceMock.query.mockResolvedValueOnce([
+        { grupo_codigo: '02', codigo: '06', nome: 'DIAGNÓSTICO POR TOMOGRAFIA' }
+      ]);
+      // formas
+      dataSourceMock.query.mockResolvedValueOnce([
+        { grupo_codigo: '02', subgrupo_codigo: '06', codigo: '01', nome: 'TOMOGRAFIA DA CABEÇA' }
+      ]);
+
+      const res = await instance.getGrupos(undefined, 'true');
+      expect(res).toEqual([
+        {
+          codigo: '02',
+          nome: 'PROCEDIMENTOS COM FINALIDADE DIAGNÓSTICA',
+          subgrupos: [
+            {
+              codigo: '06',
+              nome: 'DIAGNÓSTICO POR TOMOGRAFIA',
+              formas_organizacao: [
+                { codigo: '01', nome: 'TOMOGRAFIA DA CABEÇA' }
+              ]
+            }
+          ]
+        }
+      ]);
+    });
+  });
+
+  describe('getSubgruposDoGrupo, getFormasDoSubgrupo, getProcedimentosDoSubgrupo', () => {
+    it('should return subgrupos of a group', async () => {
+      dataSourceMock.query.mockResolvedValueOnce([
+        { grupo_codigo: '02', codigo: '06', nome: 'DIAGNÓSTICO POR TOMOGRAFIA' }
+      ]);
+
+      const res = await instance.getSubgruposDoGrupo('02');
+      expect(res).toEqual([
+        { grupo_codigo: '02', codigo: '06', nome: 'DIAGNÓSTICO POR TOMOGRAFIA' }
+      ]);
+    });
+
+    it('should return formas de organizacao of a subgrupo', async () => {
+      dataSourceMock.query.mockResolvedValueOnce([
+        { grupo_codigo: '02', subgrupo_codigo: '06', codigo: '01', nome: 'TOMOGRAFIA DA CABEÇA' }
+      ]);
+
+      const res = await instance.getFormasDoSubgrupo('02', '06');
+      expect(res).toEqual([
+        { grupo_codigo: '02', subgrupo_codigo: '06', codigo: '01', nome: 'TOMOGRAFIA DA CABEÇA' }
+      ]);
+    });
+  });
 });
